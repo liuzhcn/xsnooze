@@ -16,6 +16,7 @@
             <connections>
                 <outlet property="launchAtLoginMenuItem" destination="I9E-pI-lLm" id="DFX-bS-N3m"/>
                 <outlet property="statusMenu" destination="AEO-aA-1fp" id="ueI-UR-7ba"/>
+                <outlet property="toggleIconMenuItem" destination="XYZ-ab-123" id="ABC-de-456"/>
             </connections>
         </customObject>
         <customObject id="YLy-65-1bz" customClass="NSFontManager"/>
@@ -27,6 +28,13 @@
                         <action selector="launchAtLoginClicked:" target="Voe-Tx-rLC" id="ooK-DW-6Kn"/>
                     </connections>
                 </menuItem>
+                <menuItem title="隐藏菜单栏图标" id="XYZ-ab-123" userLabel="Toggle Icon Menu Item">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <connections>
+                        <action selector="toggleIconClicked:" target="Voe-Tx-rLC" id="DEF-gh-789"/>
+                    </connections>
+                </menuItem>
+                <menuItem isSeparatorItem="YES" id="sep-01-234"/>
                 <menuItem title="Quit" id="0IH-xa-Tvk">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
