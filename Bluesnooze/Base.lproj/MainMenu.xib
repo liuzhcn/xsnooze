@@ -28,7 +28,7 @@
                         <action selector="launchAtLoginClicked:" target="Voe-Tx-rLC" id="ooK-DW-6Kn"/>
                     </connections>
                 </menuItem>
-                <menuItem title="隐藏菜单栏图标" id="XYZ-ab-123" userLabel="Toggle Icon Menu Item">
+                <menuItem title="Hide menu bar icon" id="XYZ-ab-123" userLabel="Toggle Icon Menu Item">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="toggleIconClicked:" target="Voe-Tx-rLC" id="DEF-gh-789"/>

@@ -157,7 +157,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hideIcon = UserDefaults.standard.bool(forKey: "hideIcon")
         let state = hideIcon ? NSControl.StateValue.on : NSControl.StateValue.off
         toggleIconMenuItem.state = state
-        toggleIconMenuItem.title = "隐藏菜单栏图标"
+        toggleIconMenuItem.title = "Hide menu bar icon"
     }
     
     // MARK: Bluetooth permission handling
