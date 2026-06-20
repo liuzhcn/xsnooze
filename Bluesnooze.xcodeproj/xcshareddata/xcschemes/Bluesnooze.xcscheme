@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "4F229AB9243CC29500B1784C"
-               BuildableName = "Bluesnooze.app"
+               BuildableName = "XSnooze.app"
                BlueprintName = "Bluesnooze"
                ReferencedContainer = "container:Bluesnooze.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "4F229AB9243CC29500B1784C"
-            BuildableName = "Bluesnooze.app"
+            BuildableName = "XSnooze.app"
             BlueprintName = "Bluesnooze"
             ReferencedContainer = "container:Bluesnooze.xcodeproj">
          </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "4F229AB9243CC29500B1784C"
-            BuildableName = "Bluesnooze.app"
+            BuildableName = "XSnooze.app"
             BlueprintName = "Bluesnooze"
             ReferencedContainer = "container:Bluesnooze.xcodeproj">
          </BuildableReference>

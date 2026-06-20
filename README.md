@@ -1,70 +1,138 @@
-![Bluesnooze logo](images/icon.png)
+![XSnooze logo](images/icon.png)
 
-# Bluesnooze
+# XSnooze
 
-[Download the latest release][download-latest] or install via Homebrew:
+XSnooze prevents your sleeping Mac from connecting to Bluetooth accessories.
 
-```sh
-brew install bluesnooze
-```
+XSnooze is a maintained fork of the original Bluesnooze project. The upstream
+project has not been updated recently, so this fork focuses on fixing practical
+issues on newer versions of macOS and adding more complete control over
+sleep-related wireless behavior.
 
-Please note the latest release requires MacOS Monterey (12.0) or higher.
+[Download the latest fork release][download-latest].
 
-## Enjoying Bluesnooze? ❤️
+Please note the latest release requires macOS Monterey (12.0) or higher.
 
-Perhaps you could [buy me a coffee](https://www.buymeacoffee.com/odlp) to say thanks :coffee:
+## What's Different in This Fork
+
+- Better compatibility with newer macOS privacy and Bluetooth behavior.
+- Bluetooth permission usage description for modern macOS.
+- Bluetooth is turned off during sleep only when the Mac is running on battery.
+- Bluetooth is turned back on after wake.
+- Menu bar icon visibility can be controlled from the app menu.
+- English and Simplified Chinese localization.
+- Updated dependencies for current build environments.
+
+## Roadmap
+
+- Automatically turn off Wi-Fi during sleep.
+- Stronger low-battery reminders that prompt the user to put the Mac to sleep.
 
 ## About
 
-**Bluesnooze prevents your sleeping Mac from connecting to Bluetooth accessories.**
+If you pair Bluetooth headphones or speakers with both your phone and Mac, it
+can be frustrating when your sleeping Mac connects intermittently and disrupts
+the audio.
 
-If you pair Bluetooth headphones or speakers with both your phone & Mac it can be frustrating when your sleeping Mac connects intermittently and disrupts the audio.
+With XSnooze, the Bluetooth connection is switched off when your Mac sleeps
+under configured conditions, and switched on when your Mac wakes.
 
-With Bluesnooze the Bluetooth connection is switched off when your Mac sleeps, and switched on when your Mac wakes.
-
-![Screenshot showing Bluesnooze in the status bar](images/screenshot.png)
-
-You might also want to check-out Whisper –  [the volume limiter for MacOS](https://apps.apple.com/gb/app/whisper-volume-limiter/id1438132944?mt=12).
+![Screenshot showing XSnooze in the status bar](images/screenshot.png)
 
 ## Installation
 
-1. Download `Bluesnooze.zip` from the [latest release][download-latest]
-1. In Finder, open `Bluesnooze.zip` in your `Downloads` directory
-1. Drag `Bluesnooze.app` to your `Applications` directory
-1. *Optional*: Configure 'Launch at login'
+1. Download `XSnooze.zip` from the [latest release][download-latest].
+2. In Finder, open `XSnooze.zip` in your `Downloads` directory.
+3. Drag `XSnooze.app` to your `Applications` directory.
+4. Optional: configure `Launch at login` from the menu bar app.
 
 ## Caveats
 
-- Please note this app is not compatible with the “Allow your Apple Watch to unlock your Mac” feature.
-- Unfortunately this app can't be distributed via the App Store because it uses a private API to switch Bluetooth on/off (but the release version is notarized by Apple).
-
-[download-latest]: https://github.com/odlp/bluesnooze/releases/latest
+- This app is not compatible with the "Allow your Apple Watch to unlock your
+  Mac" feature.
+- This app uses a private API to switch Bluetooth on and off. That is why it is
+  not suitable for App Store distribution.
 
 ## FAQs
 
-### Can you add support for selectively disconnecting certain devices?
+### Is this the original Bluesnooze project?
 
-Bluesnooze is a really simple app which toggles the Bluetooth power on/off.
-Disconnecting specific devices would require a complete rewrite, and I don't
-need this functionality or the complexity it brings. Please feel free to fork &
-experiment as you like ✌️
+No. This is a maintained fork based on the original project by Oliver Peate.
+The original repository is available at
+[odlp/bluesnooze](https://github.com/odlp/bluesnooze).
 
-### How can I hide the Bluesnooze icon?
+### How can I hide or restore the XSnooze icon?
 
-In your terminal run the following command:
+Use the menu bar item:
 
-```sh
-defaults write com.oliverpeate.Bluesnooze hideIcon -bool true && killall Bluesnooze
-```
+1. Open the XSnooze menu.
+2. Toggle `Hide menu bar icon`.
 
-When you next relaunch the application there should be no icon in the menu bar.
+When hiding is enabled, the icon is shown temporarily when the app is opened
+again so that you can change the setting.
 
-### How can I restore the Bluesnooze icon?
+---
 
-In your terminal run the following command:
+# XSnooze 中文说明
 
-```sh
-defaults delete com.oliverpeate.Bluesnooze hideIcon && killall Bluesnooze
-```
+XSnooze 可以避免休眠中的 Mac 自动连接蓝牙耳机、音箱等蓝牙设备。
 
-When you next relaunch the application it should appear in the menu bar.
+XSnooze 是基于原 Bluesnooze 项目继续维护的 fork。由于上游项目近期没有继续
+更新，本 fork 主要用于解决新版 macOS 使用中的实际问题，并提供更完整的睡眠
+相关无线设置能力。
+
+[下载当前 fork 的最新版本][download-latest]。
+
+当前版本需要 macOS Monterey (12.0) 或更高版本。
+
+## 本 fork 的主要变化
+
+- 更好适配新版 macOS 的隐私权限和蓝牙行为。
+- 增加新版 macOS 所需的蓝牙权限说明。
+- Mac 使用电池供电时，睡眠前自动关闭蓝牙；接入电源时不关闭。
+- Mac 唤醒后自动打开蓝牙。
+- 可以在菜单中控制是否隐藏菜单栏图标。
+- 支持英文和简体中文界面。
+- 更新依赖，以适配当前构建环境。
+
+## 后续计划
+
+- 睡眠时自动关闭 Wi-Fi。
+- 在电量不足时加强提醒，引导用户及时让 Mac 进入睡眠。
+
+## 使用场景
+
+如果你的蓝牙耳机或音箱同时配对了手机和 Mac，休眠中的 Mac 可能会偶尔抢占
+蓝牙连接，打断手机上的音频播放。
+
+XSnooze 会在 Mac 进入睡眠时按配置关闭蓝牙，并在 Mac 唤醒后重新打开蓝牙。
+
+## 安装
+
+1. 从 [latest release][download-latest] 下载 `XSnooze.zip`。
+2. 在 Finder 中打开下载目录里的 `XSnooze.zip`。
+3. 将 `XSnooze.app` 拖到 `Applications` 目录。
+4. 可选：在菜单栏中启用 `登录时启动`。
+
+## 注意事项
+
+- 本应用不兼容“允许 Apple Watch 解锁 Mac”功能。
+- 本应用使用私有 API 来开关蓝牙，因此不适合通过 App Store 分发。
+
+## 常见问题
+
+### 这是原版 Bluesnooze 项目吗？
+
+不是。这是基于 Oliver Peate 原项目继续维护的 fork。原项目地址是
+[odlp/bluesnooze](https://github.com/odlp/bluesnooze)。
+
+### 如何隐藏或恢复 XSnooze 图标？
+
+通过菜单栏中的 XSnooze 菜单操作：
+
+1. 打开 XSnooze 菜单。
+2. 勾选或取消 `隐藏菜单栏图标`。
+
+启用隐藏后，再次打开应用时图标会临时显示，方便你重新修改设置。
+
+[download-latest]: https://github.com/liuzhcn/xsnooze/releases/latest

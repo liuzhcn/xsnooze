@@ -133,7 +133,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             icon.isTemplate = true
             statusItem.button?.image = icon
         } else {
-            statusItem.button?.title = "Bluesnooze"
+            statusItem.button?.title = "XSnooze"
         }
         statusItem.menu = statusMenu
         statusItem.isVisible = true // 确保图标可见
@@ -157,7 +157,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hideIcon = UserDefaults.standard.bool(forKey: "hideIcon")
         let state = hideIcon ? NSControl.StateValue.on : NSControl.StateValue.off
         toggleIconMenuItem.state = state
-        toggleIconMenuItem.title = "Hide menu bar icon"
     }
     
     // MARK: Bluetooth permission handling

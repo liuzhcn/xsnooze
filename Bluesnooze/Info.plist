@@ -27,7 +27,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Bluesnooze需要访问蓝牙以便在睡眠时自动关闭蓝牙，唤醒时自动打开蓝牙。</string>
+	<string>XSnooze needs Bluetooth access to automatically turn Bluetooth off during sleep and back on after wake.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2020 Oliver Peate. All rights reserved.</string>
 	<key>NSMainNibFile</key>
