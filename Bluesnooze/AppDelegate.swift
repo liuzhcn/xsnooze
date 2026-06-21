@@ -22,12 +22,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hideIconTask: DispatchWorkItem?
     private let bluetoothWasOnBeforeSleepKey = "bluetoothWasOnBeforeSleep"
     private let wifiWasOnBeforeSleepKey = "wifiWasOnBeforeSleep"
+    private let powerSourceMonitor = PowerSourceMonitor()
+    private let privilegedHelperClient = PrivilegedHelperClient()
+    private var lowBatteryAlert: NSAlert?
+    private var lowBatteryCountdownTimer: Timer?
+    private var lowBatteryWarningDeadline: Date?
+    private var lowBatteryTimedOut = false
+    private var lowBatteryCanceled = false
+    private var suppressedBatteryBucket: Int?
+    private let lowBatteryCountdownSeconds = 60
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         initStatusItem()
         setLaunchAtLoginState()
         setToggleIconState()
         setupNotificationHandlers()
+        privilegedHelperClient.restoreHibernationModeIfNeeded()
+        setupLowBatteryMonitor()
     }
     
     // 处理应用程序被再次打开的情况
@@ -126,6 +137,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let bluetoothWasOn = UserDefaults.standard.bool(forKey: bluetoothWasOnBeforeSleepKey)
         let wifiWasOn = UserDefaults.standard.bool(forKey: wifiWasOnBeforeSleepKey)
 
+        privilegedHelperClient.restoreHibernationModeIfNeeded()
+
         if bluetoothWasOn && hasBluetoothPermission() {
             setBluetooth(powerOn: true)
         }
@@ -174,6 +187,145 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func clearStoredPowerStates() {
         UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
         UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
+    }
+
+    // MARK: Low battery hibernation
+
+    private func setupLowBatteryMonitor() {
+        powerSourceMonitor.onChange = { [weak self] snapshot in
+            DispatchQueue.main.async {
+                self?.handlePowerSourceSnapshot(snapshot)
+            }
+        }
+        powerSourceMonitor.start()
+    }
+
+    private func handlePowerSourceSnapshot(_ snapshot: PowerSourceSnapshot) {
+        guard snapshot.isBatteryPower,
+              !snapshot.isCharging,
+              snapshot.chargePercentage < LowBatteryPolicy.warningThreshold else {
+            suppressedBatteryBucket = nil
+            cancelLowBatteryWarning()
+            return
+        }
+
+        guard lowBatteryAlert == nil,
+              LowBatteryPolicy.shouldStartWarning(for: snapshot, suppressedBucket: suppressedBatteryBucket),
+              let bucket = LowBatteryPolicy.bucket(for: snapshot.chargePercentage) else {
+            return
+        }
+
+        showLowBatteryWarning(for: snapshot, bucket: bucket)
+    }
+
+    private func showLowBatteryWarning(for snapshot: PowerSourceSnapshot, bucket: Int) {
+        lowBatteryTimedOut = false
+        lowBatteryCanceled = false
+        lowBatteryWarningDeadline = Date().addingTimeInterval(TimeInterval(lowBatteryCountdownSeconds))
+
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Battery Low", comment: "Low battery alert title")
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: NSLocalizedString("OK", comment: "Low battery alert confirmation button"))
+        lowBatteryAlert = alert
+        updateLowBatteryAlertText(for: snapshot, remainingSeconds: lowBatteryCountdownSeconds)
+
+        lowBatteryCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.tickLowBatteryCountdown(snapshot: snapshot)
+        }
+
+        let response = alert.runModal()
+        lowBatteryCountdownTimer?.invalidate()
+        lowBatteryCountdownTimer = nil
+        lowBatteryAlert = nil
+        lowBatteryWarningDeadline = nil
+
+        if lowBatteryCanceled {
+            return
+        }
+
+        if lowBatteryTimedOut {
+            forceHibernateIfStillNeeded()
+            return
+        }
+
+        if response == .alertFirstButtonReturn {
+            suppressedBatteryBucket = bucket
+        }
+    }
+
+    private func tickLowBatteryCountdown(snapshot: PowerSourceSnapshot) {
+        if let currentSnapshot = powerSourceMonitor.currentSnapshot(),
+           !LowBatteryPolicy.shouldStartWarning(for: currentSnapshot, suppressedBucket: nil) {
+            cancelLowBatteryWarning()
+            return
+        }
+
+        guard let deadline = lowBatteryWarningDeadline else {
+            return
+        }
+
+        let remainingSeconds = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
+        updateLowBatteryAlertText(for: snapshot, remainingSeconds: remainingSeconds)
+
+        if remainingSeconds <= 0 {
+            lowBatteryTimedOut = true
+            lowBatteryCountdownTimer?.invalidate()
+            lowBatteryCountdownTimer = nil
+            lowBatteryAlert?.window.orderOut(nil)
+            NSApp.abortModal()
+        }
+    }
+
+    private func updateLowBatteryAlertText(for snapshot: PowerSourceSnapshot, remainingSeconds: Int) {
+        lowBatteryAlert?.informativeText = String(
+            format: NSLocalizedString(
+                "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will hibernate this Mac.",
+                comment: "Low battery alert countdown text"
+            ),
+            snapshot.chargePercentage,
+            remainingSeconds
+        )
+    }
+
+    private func cancelLowBatteryWarning() {
+        guard lowBatteryAlert != nil else {
+            return
+        }
+
+        lowBatteryCanceled = true
+        lowBatteryCountdownTimer?.invalidate()
+        lowBatteryCountdownTimer = nil
+        lowBatteryAlert?.window.orderOut(nil)
+        NSApp.abortModal()
+    }
+
+    private func forceHibernateIfStillNeeded() {
+        guard let snapshot = powerSourceMonitor.currentSnapshot(),
+              LowBatteryPolicy.shouldStartWarning(for: snapshot, suppressedBucket: nil) else {
+            return
+        }
+
+        privilegedHelperClient.prepareHibernateAndSleep { [weak self] success, message in
+            guard !success else {
+                return
+            }
+
+            NSLog("XSnooze: Failed to prepare hibernation: \(message ?? "Unknown error")")
+            self?.showHelperFailure(message: message)
+        }
+    }
+
+    private func showHelperFailure(message: String?) {
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("XSnooze Helper Required", comment: "Privileged helper failure title")
+        alert.informativeText = message ?? NSLocalizedString(
+            "XSnooze could not install or contact its privileged helper. Forced low-battery hibernation requires administrator approval.",
+            comment: "Privileged helper failure text"
+        )
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: NSLocalizedString("OK", comment: "Privileged helper failure confirmation button"))
+        alert.runModal()
     }
 
     // MARK: UI state

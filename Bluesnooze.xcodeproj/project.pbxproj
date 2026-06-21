@@ -11,10 +11,28 @@
 		4F229AC0243CC29600B1784C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F229ABF243CC29600B1784C /* Assets.xcassets */; };
 		4F229AC3243CC29600B1784C /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 4F229AC1243CC29600B1784C /* MainMenu.xib */; };
 		4F31A0012C25A10000B1784C /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 4F31A0002C25A10000B1784C /* InfoPlist.strings */; };
+		5A1500012C25B00100B1784C /* LowBatteryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500002C25B00100B1784C /* LowBatteryPolicy.swift */; };
+		5A1500032C25B00100B1784C /* PowerSourceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500022C25B00100B1784C /* PowerSourceMonitor.swift */; };
+		5A1500052C25B00100B1784C /* PrivilegedHelperClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500042C25B00100B1784C /* PrivilegedHelperClient.swift */; };
+		5A1500072C25B00100B1784C /* PrivilegedHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500062C25B00100B1784C /* PrivilegedHelperProtocol.swift */; };
+		5A1500082C25B00100B1784C /* PrivilegedHelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500062C25B00100B1784C /* PrivilegedHelperProtocol.swift */; };
+		5A15000A2C25B00100B1784C /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500092C25B00100B1784C /* main.swift */; };
+		5A15000F2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper in Embed Privileged Helper */ = {isa = PBXBuildFile; fileRef = 5A15000E2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		5A1500232C25B00100B1784C /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5A1500202C25B00100B1784C /* Localizable.strings */; };
 		4FDC9C13243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM in CopyFiles */ = {isa = PBXBuildFile; fileRef = 4FDC9C12243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM */; };
 		4FDC9C14243DCC6B00FB0C4E /* LaunchAtLogin.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */; };
 		4FDC9C15243DCC6B00FB0C4E /* LaunchAtLogin.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5A1500142C25B00100B1784C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4F229AB2243CC29500B1784C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5A15000C2C25B00100B1784C;
+			remoteInfo = XSnoozeHelper;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		4FDC9C0C243DCB0B00FB0C4E /* CopyFiles */ = {
@@ -38,6 +56,17 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5A1500102C25B00100B1784C /* Embed Privileged Helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchServices;
+			dstSubfolderSpec = 1;
+			files = (
+				5A15000F2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper in Embed Privileged Helper */,
+			);
+			name = "Embed Privileged Helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +81,16 @@
 		4F31A0032C25A10000B1784C /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/MainMenu.strings"; sourceTree = "<group>"; };
 		4F31A0042C25A10000B1784C /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		4F31A0052C25A10000B1784C /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		5A1500002C25B00100B1784C /* LowBatteryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowBatteryPolicy.swift; sourceTree = "<group>"; };
+		5A1500022C25B00100B1784C /* PowerSourceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerSourceMonitor.swift; sourceTree = "<group>"; };
+		5A1500042C25B00100B1784C /* PrivilegedHelperClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegedHelperClient.swift; sourceTree = "<group>"; };
+		5A1500062C25B00100B1784C /* PrivilegedHelperProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivilegedHelperProtocol.swift; sourceTree = "<group>"; };
+		5A1500092C25B00100B1784C /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		5A15000B2C25B00100B1784C /* XSnoozeHelper-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "XSnoozeHelper-Info.plist"; sourceTree = "<group>"; };
+		5A15000D2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = com.liuzhcn.XSnooze.Helper.plist; sourceTree = "<group>"; };
+		5A15000E2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.liuzhcn.XSnooze.Helper; sourceTree = BUILT_PRODUCTS_DIR; };
+		5A1500212C25B00100B1784C /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		5A1500222C25B00100B1784C /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = LaunchAtLogin.framework; path = Carthage/Build/Mac/LaunchAtLogin.framework; sourceTree = "<group>"; };
 		4FDC9C12243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM */ = {isa = PBXFileReference; lastKnownFileType = wrapper.dsym; name = LaunchAtLogin.framework.dSYM; path = Carthage/Build/Mac/LaunchAtLogin.framework.dSYM; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -65,6 +104,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5A1500172C25B00100B1784C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -72,6 +118,8 @@
 			isa = PBXGroup;
 			children = (
 				4F229ABC243CC29500B1784C /* Bluesnooze */,
+				5A1500112C25B00100B1784C /* Shared */,
+				5A1500122C25B00100B1784C /* XSnoozeHelper */,
 				4F229ABB243CC29500B1784C /* Products */,
 				4FDC9C0D243DCB7B00FB0C4E /* Frameworks */,
 			);
@@ -81,6 +129,7 @@
 			isa = PBXGroup;
 			children = (
 				4F229ABA243CC29500B1784C /* XSnooze.app */,
+				5A15000E2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -89,14 +138,36 @@
 			isa = PBXGroup;
 			children = (
 				4F229ABD243CC29500B1784C /* AppDelegate.swift */,
+				5A1500002C25B00100B1784C /* LowBatteryPolicy.swift */,
+				5A1500022C25B00100B1784C /* PowerSourceMonitor.swift */,
+				5A1500042C25B00100B1784C /* PrivilegedHelperClient.swift */,
 				4F229ABF243CC29600B1784C /* Assets.xcassets */,
 				4F229AC1243CC29600B1784C /* MainMenu.xib */,
 				4F229AC4243CC29600B1784C /* Info.plist */,
 				4F31A0002C25A10000B1784C /* InfoPlist.strings */,
+				5A1500202C25B00100B1784C /* Localizable.strings */,
 				4F229AC5243CC29600B1784C /* Bluesnooze.entitlements */,
 				4F229ACB243CC72800B1784C /* Bluesnooze-Bridging-Header.h */,
 			);
 			path = Bluesnooze;
+			sourceTree = "<group>";
+		};
+		5A1500112C25B00100B1784C /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				5A1500062C25B00100B1784C /* PrivilegedHelperProtocol.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		5A1500122C25B00100B1784C /* XSnoozeHelper */ = {
+			isa = PBXGroup;
+			children = (
+				5A1500092C25B00100B1784C /* main.swift */,
+				5A15000B2C25B00100B1784C /* XSnoozeHelper-Info.plist */,
+				5A15000D2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper.plist */,
+			);
+			path = XSnoozeHelper;
 			sourceTree = "<group>";
 		};
 		4FDC9C0D243DCB7B00FB0C4E /* Frameworks */ = {
@@ -121,16 +192,34 @@
 				4F229AB8243CC29500B1784C /* Resources */,
 				4FDC9C0C243DCB0B00FB0C4E /* CopyFiles */,
 				4FDC9C16243DCC6B00FB0C4E /* Embed Frameworks */,
+				5A1500102C25B00100B1784C /* Embed Privileged Helper */,
 				4FDC9C11243DCBD700FB0C4E /* Run Script */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				5A1500152C25B00100B1784C /* PBXTargetDependency */,
 			);
 			name = Bluesnooze;
 			productName = Bluesnooze;
 			productReference = 4F229ABA243CC29500B1784C /* XSnooze.app */;
 			productType = "com.apple.product-type.application";
+		};
+		5A15000C2C25B00100B1784C /* XSnoozeHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A1500182C25B00100B1784C /* Build configuration list for PBXNativeTarget "XSnoozeHelper" */;
+			buildPhases = (
+				5A1500162C25B00100B1784C /* Sources */,
+				5A1500172C25B00100B1784C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = XSnoozeHelper;
+			productName = com.liuzhcn.XSnooze.Helper;
+			productReference = 5A15000E2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper */;
+			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
 
@@ -146,6 +235,9 @@
 					4F229AB9243CC29500B1784C = {
 						CreatedOnToolsVersion = 11.1;
 						LastSwiftMigration = 1110;
+					};
+					5A15000C2C25B00100B1784C = {
+						CreatedOnToolsVersion = 14.3;
 					};
 				};
 			};
@@ -164,6 +256,7 @@
 			projectRoot = "";
 			targets = (
 				4F229AB9243CC29500B1784C /* Bluesnooze */,
+				5A15000C2C25B00100B1784C /* XSnoozeHelper */,
 			);
 		};
 /* End PBXProject section */
@@ -175,6 +268,7 @@
 			files = (
 				4F229AC0243CC29600B1784C /* Assets.xcassets in Resources */,
 				4F31A0012C25A10000B1784C /* InfoPlist.strings in Resources */,
+				5A1500232C25B00100B1784C /* Localizable.strings in Resources */,
 				4F229AC3243CC29600B1784C /* MainMenu.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -227,10 +321,31 @@
 			buildActionMask = 2147483647;
 			files = (
 				4F229ABE243CC29500B1784C /* AppDelegate.swift in Sources */,
+				5A1500012C25B00100B1784C /* LowBatteryPolicy.swift in Sources */,
+				5A1500032C25B00100B1784C /* PowerSourceMonitor.swift in Sources */,
+				5A1500052C25B00100B1784C /* PrivilegedHelperClient.swift in Sources */,
+				5A1500072C25B00100B1784C /* PrivilegedHelperProtocol.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A1500162C25B00100B1784C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A15000A2C25B00100B1784C /* main.swift in Sources */,
+				5A1500082C25B00100B1784C /* PrivilegedHelperProtocol.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5A1500152C25B00100B1784C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5A15000C2C25B00100B1784C /* XSnoozeHelper */;
+			targetProxy = 5A1500142C25B00100B1784C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		4F229AC1243CC29600B1784C /* MainMenu.xib */ = {
@@ -250,6 +365,15 @@
 				4F31A0052C25A10000B1784C /* zh-Hans */,
 			);
 			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		5A1500202C25B00100B1784C /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				5A1500212C25B00100B1784C /* en */,
+				5A1500222C25B00100B1784C /* zh-Hans */,
+			);
+			name = Localizable.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -393,7 +517,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
@@ -423,10 +547,63 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5A1500192C25B00100B1784C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7X3FR535W8;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.5;
+				OTHER_LDFLAGS = (
+					"-sectcreate",
+					__TEXT,
+					__launchd_plist,
+					"$(SRCROOT)/XSnoozeHelper/com.liuzhcn.XSnooze.Helper.plist",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze.Helper;
+				PRODUCT_NAME = com.liuzhcn.XSnooze.Helper;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		5A15001A2C25B00100B1784C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7X3FR535W8;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.5;
+				OTHER_LDFLAGS = (
+					"-sectcreate",
+					__TEXT,
+					__launchd_plist,
+					"$(SRCROOT)/XSnoozeHelper/com.liuzhcn.XSnooze.Helper.plist",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze.Helper;
+				PRODUCT_NAME = com.liuzhcn.XSnooze.Helper;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -448,6 +625,15 @@
 			buildConfigurations = (
 				4F229AC9243CC29600B1784C /* Debug */,
 				4F229ACA243CC29600B1784C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5A1500182C25B00100B1784C /* Build configuration list for PBXNativeTarget "XSnoozeHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A1500192C25B00100B1784C /* Debug */,
+				5A15001A2C25B00100B1784C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

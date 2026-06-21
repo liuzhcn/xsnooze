@@ -34,6 +34,11 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SMPrivilegedExecutables</key>
+	<dict>
+		<key>com.liuzhcn.XSnooze.Helper</key>
+		<string>identifier "com.liuzhcn.XSnooze.Helper" and anchor apple generic and certificate leaf[subject.OU] = "7X3FR535W8"</string>
+	</dict>
 	<key>NSSupportsAutomaticTermination</key>
 	<true/>
 	<key>NSSupportsSuddenTermination</key>
