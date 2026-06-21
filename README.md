@@ -2,7 +2,8 @@
 
 # XSnooze
 
-XSnooze prevents your sleeping Mac from connecting to Bluetooth accessories.
+XSnooze prevents your sleeping Mac from connecting to Bluetooth accessories and
+Wi-Fi while it is asleep.
 
 XSnooze is a maintained fork of the original Bluesnooze project. The upstream
 project has not been updated recently, so this fork focuses on fixing practical
@@ -17,15 +18,14 @@ Please note the latest release requires macOS Monterey (12.0) or higher.
 
 - Better compatibility with newer macOS privacy and Bluetooth behavior.
 - Bluetooth permission usage description for modern macOS.
-- Bluetooth is turned off during sleep only when the Mac is running on battery.
-- Bluetooth is turned back on after wake.
+- Bluetooth and Wi-Fi are turned off during sleep if they were on before sleep.
+- Bluetooth and Wi-Fi are restored after wake only if they were on before sleep.
 - Menu bar icon visibility can be controlled from the app menu.
 - English and Simplified Chinese localization.
 - Updated dependencies for current build environments.
 
 ## Roadmap
 
-- Automatically turn off Wi-Fi during sleep.
 - Stronger low-battery reminders that prompt the user to put the Mac to sleep.
 
 ## About
@@ -34,8 +34,9 @@ If you pair Bluetooth headphones or speakers with both your phone and Mac, it
 can be frustrating when your sleeping Mac connects intermittently and disrupts
 the audio.
 
-With XSnooze, the Bluetooth connection is switched off when your Mac sleeps
-under configured conditions, and switched on when your Mac wakes.
+With XSnooze, Bluetooth and Wi-Fi are switched off when your Mac sleeps under
+configured conditions, then restored when your Mac wakes if they were previously
+on.
 
 ![Screenshot showing XSnooze in the status bar](images/screenshot.png)
 
@@ -75,7 +76,8 @@ again so that you can change the setting.
 
 # XSnooze 中文说明
 
-XSnooze 可以避免休眠中的 Mac 自动连接蓝牙耳机、音箱等蓝牙设备。
+XSnooze 可以避免休眠中的 Mac 自动连接蓝牙耳机、音箱等蓝牙设备，并在休眠期
+间关闭 Wi-Fi。
 
 XSnooze 是基于原 Bluesnooze 项目继续维护的 fork。由于上游项目近期没有继续
 更新，本 fork 主要用于解决新版 macOS 使用中的实际问题，并提供更完整的睡眠
@@ -89,15 +91,14 @@ XSnooze 是基于原 Bluesnooze 项目继续维护的 fork。由于上游项目�
 
 - 更好适配新版 macOS 的隐私权限和蓝牙行为。
 - 增加新版 macOS 所需的蓝牙权限说明。
-- Mac 使用电池供电时，睡眠前自动关闭蓝牙；接入电源时不关闭。
-- Mac 唤醒后自动打开蓝牙。
+- Mac 睡眠前自动关闭原本处于开启状态的蓝牙和 Wi-Fi。
+- Mac 唤醒后只恢复睡眠前处于开启状态的蓝牙和 Wi-Fi。
 - 可以在菜单中控制是否隐藏菜单栏图标。
 - 支持英文和简体中文界面。
 - 更新依赖，以适配当前构建环境。
 
 ## 后续计划
 
-- 睡眠时自动关闭 Wi-Fi。
 - 在电量不足时加强提醒，引导用户及时让 Mac 进入睡眠。
 
 ## 使用场景
@@ -105,7 +106,8 @@ XSnooze 是基于原 Bluesnooze 项目继续维护的 fork。由于上游项目�
 如果你的蓝牙耳机或音箱同时配对了手机和 Mac，休眠中的 Mac 可能会偶尔抢占
 蓝牙连接，打断手机上的音频播放。
 
-XSnooze 会在 Mac 进入睡眠时按配置关闭蓝牙，并在 Mac 唤醒后重新打开蓝牙。
+XSnooze 会在 Mac 进入睡眠时按配置关闭蓝牙和 Wi-Fi，并在 Mac 唤醒后恢复睡眠
+前处于开启状态的无线连接。
 
 ## 安装
 

@@ -7,6 +7,7 @@
 //
 
 import Cocoa
+import CoreWLAN
 import IOBluetooth
 import LaunchAtLogin
 
@@ -19,15 +20,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var hideIconTask: DispatchWorkItem?
+    private let bluetoothWasOnBeforeSleepKey = "bluetoothWasOnBeforeSleep"
+    private let wifiWasOnBeforeSleepKey = "wifiWasOnBeforeSleep"
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         initStatusItem()
         setLaunchAtLoginState()
         setToggleIconState()
         setupNotificationHandlers()
-        
-        // 检查蓝牙权限，只有在有权限时才设置蓝牙状态
-        checkBluetoothPermissionAndSetState()
     }
     
     // 处理应用程序被再次打开的情况
@@ -99,7 +99,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupNotificationHandlers() {
         [
             NSWorkspace.willSleepNotification: #selector(onPowerDown(note:)),
-            NSWorkspace.willPowerOffNotification: #selector(onPowerDown(note:)),
             NSWorkspace.didWakeNotification: #selector(onPowerUp(note:))
         ].forEach { notification, sel in
             NSWorkspace.shared.notificationCenter.addObserver(self, selector: sel, name: notification, object: nil)
@@ -107,22 +106,74 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func onPowerDown(note: NSNotification) {
-        if hasBluetoothPermission() {
-            // 只有在使用电池时才关闭蓝牙，插电时不关闭
-            if isRunningOnBattery() {
+        let bluetoothWasOn = isBluetoothOn()
+        let wifiWasOn = isWiFiOn()
+        UserDefaults.standard.set(bluetoothWasOn, forKey: bluetoothWasOnBeforeSleepKey)
+        UserDefaults.standard.set(wifiWasOn, forKey: wifiWasOnBeforeSleepKey)
+
+        if bluetoothWasOn {
+            if hasBluetoothPermission() {
                 setBluetooth(powerOn: false)
             }
+        }
+
+        if wifiWasOn {
+            setWiFi(powerOn: false)
         }
     }
 
     @objc func onPowerUp(note: NSNotification) {
-        if hasBluetoothPermission() {
+        let bluetoothWasOn = UserDefaults.standard.bool(forKey: bluetoothWasOnBeforeSleepKey)
+        let wifiWasOn = UserDefaults.standard.bool(forKey: wifiWasOnBeforeSleepKey)
+
+        if bluetoothWasOn && hasBluetoothPermission() {
             setBluetooth(powerOn: true)
         }
+
+        if wifiWasOn {
+            setWiFi(powerOn: true)
+        }
+
+        clearStoredPowerStates()
     }
 
     private func setBluetooth(powerOn: Bool) {
         IOBluetoothPreferenceSetControllerPowerState(powerOn ? 1 : 0)
+    }
+
+    private func isBluetoothOn() -> Bool {
+        guard hasBluetoothPermission(),
+              let bluetoothController = IOBluetoothHostController.default() else {
+            return false
+        }
+
+        return bluetoothController.powerState == kBluetoothHCIPowerStateON
+    }
+
+    private func setWiFi(powerOn: Bool) {
+        guard let interface = CWWiFiClient.shared().interface() else {
+            NSLog("XSnooze: No Wi-Fi interface found")
+            return
+        }
+
+        do {
+            try interface.setPower(powerOn)
+        } catch {
+            NSLog("XSnooze: Failed to set Wi-Fi power state to \(powerOn): \(error)")
+        }
+    }
+
+    private func isWiFiOn() -> Bool {
+        guard let interface = CWWiFiClient.shared().interface() else {
+            return false
+        }
+
+        return interface.powerOn()
+    }
+
+    private func clearStoredPowerStates() {
+        UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
+        UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
     }
 
     // MARK: UI state
@@ -161,12 +212,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // MARK: Bluetooth permission handling
     
-    private func checkBluetoothPermissionAndSetState() {
-        if hasBluetoothPermission() {
-            setBluetooth(powerOn: true)
-        }
-    }
-    
     private func hasBluetoothPermission() -> Bool {
         // 检查蓝牙权限状态
         if #available(macOS 10.15, *) {
@@ -178,28 +223,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // 在较旧的 macOS 版本上，通常不需要特殊权限
             return true
         }
-    }
-    
-    // MARK: Power source detection
-    
-    private func isRunningOnBattery() -> Bool {
-        // 使用shell命令检查电源状态
-        let task = Process()
-        task.launchPath = "/usr/bin/pmset"
-        task.arguments = ["-g", "ps"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.launch()
-        task.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        if let output = String(data: data, encoding: .utf8) {
-            // 如果输出包含 "AC Power"，说明插着电源
-            return !output.contains("AC Power")
-        }
-        
-        // 如果无法获取电源信息，默认认为是使用电池（更安全的选择）
-        return true
     }
 }
