@@ -1,31 +1,45 @@
 import Foundation
+import OSLog
+
+private let helperLog = Logger(subsystem: "com.liuzhcn.XSnooze.Helper", category: "hibernate")
 
 private let stateFileURL = URL(fileURLWithPath: "/Library/PrivilegedHelperTools/com.liuzhcn.XSnooze.Helper.state.plist")
 
 final class HelperService: NSObject, PrivilegedHelperProtocol {
     func prepareHibernateAndSleep(_ reply: @escaping (Bool, String?) -> Void) {
+        helperLog.info("Preparing forced hibernation and sleep.")
         do {
             let originalMode = try currentBatteryHibernateMode()
+            helperLog.info("Read current Battery Power hibernatemode. originalMode=\(originalMode, privacy: .public)")
             try saveOriginalHibernateMode(originalMode)
+            helperLog.info("Saved original Battery Power hibernatemode.")
             try runPMSet(arguments: ["-b", "hibernatemode", "25"])
+            helperLog.info("Set Battery Power hibernatemode for forced hibernation.")
             try runPMSet(arguments: ["sleepnow"])
+            helperLog.info("Issued sleepnow command for forced hibernation.")
             reply(true, nil)
         } catch {
+            helperLog.error("Failed to prepare forced hibernation and sleep. error=\(error.localizedDescription, privacy: .public)")
             reply(false, error.localizedDescription)
         }
     }
 
     func restoreHibernationModeIfNeeded(_ reply: @escaping (Bool, String?) -> Void) {
+        helperLog.info("Checking whether Battery Power hibernatemode needs to be restored.")
         do {
             guard let originalMode = try savedOriginalHibernateMode() else {
+                helperLog.info("No saved Battery Power hibernatemode found; nothing to restore.")
                 reply(true, "No saved hibernatemode to restore.")
                 return
             }
 
+            helperLog.info("Restoring saved Battery Power hibernatemode. originalMode=\(originalMode, privacy: .public)")
             try runPMSet(arguments: ["-b", "hibernatemode", "\(originalMode)"])
             try FileManager.default.removeItem(at: stateFileURL)
+            helperLog.info("Restored Battery Power hibernatemode and removed saved state.")
             reply(true, nil)
         } catch {
+            helperLog.error("Failed to restore Battery Power hibernatemode. error=\(error.localizedDescription, privacy: .public)")
             reply(false, error.localizedDescription)
         }
     }
@@ -151,4 +165,3 @@ let listener = NSXPCListener(machServiceName: privilegedHelperMachServiceName)
 listener.delegate = delegate
 listener.resume()
 RunLoop.current.run()
-

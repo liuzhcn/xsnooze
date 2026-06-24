@@ -1,27 +1,45 @@
 import Foundation
+import OSLog
 import Security
 import ServiceManagement
 
+private let hibernateLog = Logger(subsystem: "com.liuzhcn.XSnooze", category: "hibernate")
+
 final class PrivilegedHelperClient {
     func prepareHibernateAndSleep(completion: @escaping (Bool, String?) -> Void) {
+        hibernateLog.info("Calling privileged helper to prepare hibernation and sleep.")
         callHelper({ helper, connection in
             helper.prepareHibernateAndSleep { success, message in
                 connection.invalidate()
+                if success {
+                    hibernateLog.info("Privileged helper prepared hibernation and sleep successfully.")
+                } else {
+                    hibernateLog.error("Privileged helper failed to prepare hibernation and sleep. message=\(message ?? "Unknown error", privacy: .public)")
+                }
                 completion(success, message)
             }
         }, unavailable: { [weak self] message in
+            hibernateLog.warning("Privileged helper unavailable; attempting to install helper. message=\(message, privacy: .public)")
             self?.blessHelper { blessSuccess, blessMessage in
                 guard blessSuccess else {
+                    hibernateLog.error("Privileged helper installation failed. message=\(blessMessage ?? "Unknown error", privacy: .public)")
                     completion(false, blessMessage)
                     return
                 }
 
+                hibernateLog.info("Privileged helper installation succeeded; retrying hibernation request.")
                 self?.callHelper({ helper, connection in
                     helper.prepareHibernateAndSleep { retrySuccess, retryMessage in
                         connection.invalidate()
+                        if retrySuccess {
+                            hibernateLog.info("Privileged helper prepared hibernation and sleep successfully after installation.")
+                        } else {
+                            hibernateLog.error("Privileged helper failed to prepare hibernation and sleep after installation. message=\(retryMessage ?? "Unknown error", privacy: .public)")
+                        }
                         completion(retrySuccess, retryMessage)
                     }
                 }, unavailable: { retryMessage in
+                    hibernateLog.error("Privileged helper unavailable after installation. message=\(retryMessage, privacy: .public)")
                     completion(false, retryMessage)
                 })
             }
@@ -29,15 +47,20 @@ final class PrivilegedHelperClient {
     }
 
     func restoreHibernationModeIfNeeded() {
+        hibernateLog.info("Calling privileged helper to restore hibernatemode if needed.")
         callHelper({ helper, connection in
             helper.restoreHibernationModeIfNeeded { success, message in
                 connection.invalidate()
-                if !success, let message {
-                    NSLog("XSnooze: Failed to restore hibernatemode: \(message)")
+                if success {
+                    hibernateLog.info("Privileged helper restore hibernatemode request succeeded. message=\(message ?? "Restored if needed.", privacy: .public)")
+                } else if let message {
+                    hibernateLog.error("Failed to restore hibernatemode. message=\(message, privacy: .public)")
+                } else {
+                    hibernateLog.error("Failed to restore hibernatemode. message=Unknown error")
                 }
             }
         }, unavailable: { message in
-            NSLog("XSnooze: Privileged helper restore unavailable: \(message)")
+            hibernateLog.warning("Privileged helper restore unavailable. message=\(message, privacy: .public)")
         })
     }
 

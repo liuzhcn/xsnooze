@@ -10,6 +10,14 @@ import Cocoa
 import CoreWLAN
 import IOBluetooth
 import LaunchAtLogin
+import OSLog
+
+private enum AppLog {
+    static let power = Logger(subsystem: "com.liuzhcn.XSnooze", category: "power")
+    static let bluetooth = Logger(subsystem: "com.liuzhcn.XSnooze", category: "bluetooth")
+    static let wifi = Logger(subsystem: "com.liuzhcn.XSnooze", category: "wifi")
+    static let hibernate = Logger(subsystem: "com.liuzhcn.XSnooze", category: "hibernate")
+}
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -117,41 +125,64 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func onPowerDown(note: NSNotification) {
+        AppLog.power.info("Sleep notification received.")
         let bluetoothWasOn = isBluetoothOn()
         let wifiWasOn = isWiFiOn()
+        AppLog.power.info("Stored pre-sleep wireless state. bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
         UserDefaults.standard.set(bluetoothWasOn, forKey: bluetoothWasOnBeforeSleepKey)
         UserDefaults.standard.set(wifiWasOn, forKey: wifiWasOnBeforeSleepKey)
 
         if bluetoothWasOn {
             if hasBluetoothPermission() {
                 setBluetooth(powerOn: false)
+            } else {
+                AppLog.bluetooth.warning("Skipping Bluetooth off request because Bluetooth permission is unavailable.")
             }
+        } else {
+            AppLog.bluetooth.info("Skipping Bluetooth off request because Bluetooth was not on before sleep.")
         }
 
         if wifiWasOn {
             setWiFi(powerOn: false)
+        } else {
+            AppLog.wifi.info("Skipping Wi-Fi off request because Wi-Fi was not on before sleep.")
         }
     }
 
     @objc func onPowerUp(note: NSNotification) {
+        AppLog.power.info("Wake notification received.")
         let bluetoothWasOn = UserDefaults.standard.bool(forKey: bluetoothWasOnBeforeSleepKey)
         let wifiWasOn = UserDefaults.standard.bool(forKey: wifiWasOnBeforeSleepKey)
+        AppLog.power.info("Loaded pre-sleep wireless state. bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
 
         privilegedHelperClient.restoreHibernationModeIfNeeded()
 
         if bluetoothWasOn && hasBluetoothPermission() {
             setBluetooth(powerOn: true)
+        } else if bluetoothWasOn {
+            AppLog.bluetooth.warning("Skipping Bluetooth on request because Bluetooth permission is unavailable.")
+        } else {
+            AppLog.bluetooth.info("Skipping Bluetooth on request because Bluetooth was not on before sleep.")
         }
 
         if wifiWasOn {
             setWiFi(powerOn: true)
+        } else {
+            AppLog.wifi.info("Skipping Wi-Fi on request because Wi-Fi was not on before sleep.")
         }
 
         clearStoredPowerStates()
     }
 
     private func setBluetooth(powerOn: Bool) {
+        AppLog.bluetooth.info("Requesting Bluetooth power state. powerOn=\(powerOn, privacy: .public)")
         IOBluetoothPreferenceSetControllerPowerState(powerOn ? 1 : 0)
+        if hasBluetoothPermission() {
+            let observedPowerOn = isBluetoothOn()
+            AppLog.bluetooth.info("Bluetooth power request completed. requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
+        } else {
+            AppLog.bluetooth.warning("Bluetooth power request completed, but observed state cannot be read because Bluetooth permission is unavailable.")
+        }
     }
 
     private func isBluetoothOn() -> Bool {
@@ -164,15 +195,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setWiFi(powerOn: Bool) {
+        AppLog.wifi.info("Requesting Wi-Fi power state. powerOn=\(powerOn, privacy: .public)")
         guard let interface = CWWiFiClient.shared().interface() else {
-            NSLog("XSnooze: No Wi-Fi interface found")
+            AppLog.wifi.error("No Wi-Fi interface found.")
             return
         }
 
         do {
             try interface.setPower(powerOn)
+            AppLog.wifi.info("Wi-Fi power request completed. powerOn=\(powerOn, privacy: .public)")
         } catch {
-            NSLog("XSnooze: Failed to set Wi-Fi power state to \(powerOn): \(error)")
+            AppLog.wifi.error("Failed to set Wi-Fi power state. powerOn=\(powerOn, privacy: .public), error=\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -187,6 +220,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func clearStoredPowerStates() {
         UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
         UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
+        AppLog.power.info("Cleared stored pre-sleep wireless state.")
     }
 
     // MARK: Low battery hibernation
@@ -303,15 +337,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func forceHibernateIfStillNeeded() {
         guard let snapshot = powerSourceMonitor.currentSnapshot(),
               LowBatteryPolicy.shouldStartWarning(for: snapshot, suppressedBucket: nil) else {
+            AppLog.hibernate.info("Skipping forced hibernation because the low-battery condition no longer applies.")
             return
         }
 
+        AppLog.hibernate.info("Requesting forced low-battery hibernation. chargePercentage=\(snapshot.chargePercentage, privacy: .public)")
         privilegedHelperClient.prepareHibernateAndSleep { [weak self] success, message in
             guard !success else {
+                AppLog.hibernate.info("Forced low-battery hibernation request succeeded.")
                 return
             }
 
-            NSLog("XSnooze: Failed to prepare hibernation: \(message ?? "Unknown error")")
+            AppLog.hibernate.error("Failed to prepare hibernation. message=\(message ?? "Unknown error", privacy: .public)")
             self?.showHelperFailure(message: message)
         }
     }
