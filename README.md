@@ -22,8 +22,8 @@ Please note the latest release requires macOS Monterey (12.0) or higher.
 - Bluetooth permission usage description for modern macOS.
 - Bluetooth and Wi-Fi are turned off during sleep if they were on before sleep.
 - Bluetooth and Wi-Fi are restored after wake only if they were on before sleep.
-- Low-battery protection warns below 30% on battery power and can hibernate the
-  Mac after a 60-second countdown if there is no response.
+- Low-battery protection can warn at a configurable battery percentage and can
+  hibernate the Mac after a configurable countdown if there is no response.
 - Menu bar icon visibility can be controlled from the app menu.
 - English and Simplified Chinese localization.
 - Updated dependencies for current build environments.
@@ -38,11 +38,11 @@ With XSnooze, Bluetooth and Wi-Fi are switched off when your Mac sleeps under
 configured conditions, then restored when your Mac wakes if they were previously
 on.
 
-When the Mac is running on battery and drops below 30%, XSnooze shows a
-countdown reminder. If nobody confirms the reminder within 60 seconds, XSnooze
-temporarily switches Battery Power sleep mode to `hibernatemode 25`, puts the
-Mac to sleep, and restores the previous sleep mode after the next wake or app
-launch.
+When the Mac is running on battery and drops below the configured percentage,
+XSnooze shows a countdown reminder. If nobody confirms the reminder before the
+configured countdown ends, XSnooze can temporarily switch Battery Power sleep
+mode to `hibernatemode 25`, put the Mac to sleep, and restore the previous sleep
+mode after the next wake or app launch.
 
 ![Screenshot showing XSnooze in the status bar](images/screenshot.png)
 
@@ -107,8 +107,8 @@ XSnooze 是基于原 Bluesnooze 项目继续维护的 fork。由于上游项目�
 - 增加新版 macOS 所需的蓝牙权限说明。
 - Mac 睡眠前自动关闭原本处于开启状态的蓝牙和 Wi-Fi。
 - Mac 唤醒后只恢复睡眠前处于开启状态的蓝牙和 Wi-Fi。
-- 电池供电且电量低于 30% 时弹出提醒；如果 60 秒内无人确认，可以让 Mac 进
-  入深度休眠。
+- 电池供电且电量低于用户设置的百分比时弹出提醒；如果倒计时结束前无人确
+  认，可以让 Mac 进入深度休眠。
 - 可以在菜单中控制是否隐藏菜单栏图标。
 - 支持英文和简体中文界面。
 - 更新依赖，以适配当前构建环境。
@@ -121,9 +121,10 @@ XSnooze 是基于原 Bluesnooze 项目继续维护的 fork。由于上游项目�
 XSnooze 会在 Mac 进入睡眠时按配置关闭蓝牙和 Wi-Fi，并在 Mac 唤醒后恢复睡眠
 前处于开启状态的无线连接。
 
-当 Mac 使用电池且电量低于 30% 时，XSnooze 会显示倒计时提醒。如果 60 秒内
-无人确认，XSnooze 会临时把电池供电下的睡眠模式切换为 `hibernatemode 25`，
-让 Mac 立即睡眠，并在下次唤醒或 App 启动后恢复原来的睡眠模式。
+当 Mac 使用电池且电量低于用户设置的百分比时，XSnooze 会显示倒计时提醒。如
+果倒计时结束前无人确认，XSnooze 可以临时把电池供电下的睡眠模式切换为
+`hibernatemode 25`，让 Mac 立即睡眠，并在下次唤醒或 App 启动后恢复原来的
+睡眠模式。
 
 ## 安装
 

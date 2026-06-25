@@ -21,23 +21,46 @@ func assertFalse(_ value: Bool, _ message: String) {
 @main
 struct LowBatteryPolicyTests {
     static func main() {
-        assertEqual(LowBatteryPolicy.bucket(for: 30), nil, "30 percent should not map to a warning bucket")
-        assertEqual(LowBatteryPolicy.bucket(for: 29), 29, "29 percent should map to the first warning bucket")
-        assertEqual(LowBatteryPolicy.bucket(for: 26), 29, "26 percent should stay in the 29 bucket")
-        assertEqual(LowBatteryPolicy.bucket(for: 25), 25, "25 percent should map to the second warning bucket")
-        assertEqual(LowBatteryPolicy.bucket(for: 4), 5, "Critical battery should map to the 5 bucket")
+        let defaultSettings = LowBatterySettings()
+        assertTrue(defaultSettings.isEnabled, "Low-battery reminders should be enabled by default")
+        assertEqual(defaultSettings.thresholdPercentage, 30, "Default threshold should preserve 1.5.1 behavior")
+        assertTrue(defaultSettings.forceHibernateOnTimeout, "Forced hibernation should be enabled by default")
+        assertEqual(defaultSettings.countdownSeconds, 60, "Default countdown should preserve 1.5.1 behavior")
+
+        assertEqual(LowBatteryPolicy.bucket(for: 30, settings: defaultSettings), nil, "30 percent should not map to a warning bucket")
+        assertEqual(LowBatteryPolicy.bucket(for: 29, settings: defaultSettings), 29, "29 percent should map to the first warning bucket")
+        assertEqual(LowBatteryPolicy.bucket(for: 26, settings: defaultSettings), 29, "26 percent should stay in the 29 bucket")
+        assertEqual(LowBatteryPolicy.bucket(for: 25, settings: defaultSettings), 25, "25 percent should map to the second warning bucket")
+        assertEqual(LowBatteryPolicy.bucket(for: 4, settings: defaultSettings), 5, "Critical battery should map to the 5 bucket")
+
+        let highThresholdSettings = LowBatterySettings(thresholdPercentage: 40)
+        assertEqual(LowBatteryPolicy.bucket(for: 40, settings: highThresholdSettings), nil, "Configured threshold should be exclusive")
+        assertEqual(LowBatteryPolicy.bucket(for: 39, settings: highThresholdSettings), 39, "39 percent should trigger when threshold is 40")
+
+        let lowThresholdSettings = LowBatterySettings(thresholdPercentage: 10)
+        assertEqual(LowBatteryPolicy.bucket(for: 10, settings: lowThresholdSettings), nil, "10 percent should not trigger when threshold is 10")
+        assertEqual(LowBatteryPolicy.bucket(for: 9, settings: lowThresholdSettings), 9, "9 percent should trigger when threshold is 10")
 
         let unpluggedLowBattery = PowerSourceSnapshot(isBatteryPower: true, isCharging: false, chargePercentage: 29)
-        assertTrue(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, suppressedBucket: nil), "29 percent on battery should trigger")
-        assertFalse(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, suppressedBucket: 29), "Confirmed bucket should not repeat")
+        assertTrue(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: defaultSettings, suppressedBucket: nil), "29 percent on battery should trigger")
+        assertFalse(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: defaultSettings, suppressedBucket: 29), "Confirmed bucket should not repeat")
 
         let nextBucket = PowerSourceSnapshot(isBatteryPower: true, isCharging: false, chargePercentage: 25)
-        assertTrue(LowBatteryPolicy.shouldStartWarning(for: nextBucket, suppressedBucket: 29), "Dropping into a new bucket should trigger again")
+        assertTrue(LowBatteryPolicy.shouldStartWarning(for: nextBucket, settings: defaultSettings, suppressedBucket: 29), "Dropping into a new bucket should trigger again")
 
         let pluggedIn = PowerSourceSnapshot(isBatteryPower: false, isCharging: true, chargePercentage: 20)
-        assertFalse(LowBatteryPolicy.shouldStartWarning(for: pluggedIn, suppressedBucket: nil), "Plugged-in Macs should not trigger")
+        assertFalse(LowBatteryPolicy.shouldStartWarning(for: pluggedIn, settings: defaultSettings, suppressedBucket: nil), "Plugged-in Macs should not trigger")
 
         let charging = PowerSourceSnapshot(isBatteryPower: true, isCharging: true, chargePercentage: 20)
-        assertFalse(LowBatteryPolicy.shouldStartWarning(for: charging, suppressedBucket: nil), "Charging Macs should not trigger")
+        assertFalse(LowBatteryPolicy.shouldStartWarning(for: charging, settings: defaultSettings, suppressedBucket: nil), "Charging Macs should not trigger")
+
+        let disabledSettings = LowBatterySettings(isEnabled: false)
+        assertFalse(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: disabledSettings, suppressedBucket: nil), "Disabled reminders should not trigger")
+        assertFalse(disabledSettings.canEditCountdown, "Countdown should be disabled when reminders are disabled")
+
+        let noHibernateSettings = LowBatterySettings(forceHibernateOnTimeout: false, countdownSeconds: 300)
+        assertTrue(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: noHibernateSettings, suppressedBucket: nil), "Timeout settings should not affect reminder triggering")
+        assertFalse(noHibernateSettings.canEditCountdown, "Countdown should be disabled when forced hibernation is disabled")
+        assertTrue(defaultSettings.canEditCountdown, "Countdown should be editable when reminders and forced hibernation are enabled")
     }
 }

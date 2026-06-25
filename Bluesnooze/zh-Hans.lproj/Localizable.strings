@@ -1,6 +1,13 @@
 "Battery Low" = "电量不足";
 "OK" = "确认";
 "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will hibernate this Mac." = "当前电量为 %d%%。请连接电源或点击确认。如果 %d 秒内没有响应，XSnooze 将让这台 Mac 进入深度休眠。";
+"Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will close this reminder." = "当前电量为 %d%%。请连接电源或点击确认。如果 %d 秒内没有响应，XSnooze 将关闭本次提醒。";
 "XSnooze Helper Required" = "需要 XSnooze Helper";
 "XSnooze could not install or contact its privileged helper. Forced low-battery hibernation requires administrator approval." = "XSnooze 无法安装或连接特权 Helper。低电量强制休眠需要管理员授权。";
-
+"Launch at login" = "登录时启动";
+"Hide menu bar icon" = "隐藏菜单栏图标";
+"Quit" = "退出";
+"Low Battery Reminder" = "低电量提醒";
+"Remind below %d%%" = "低于 %d%% 时提醒";
+"Hibernate if no response" = "无人响应时强制休眠";
+"Countdown %ds" = "倒计时 %d 秒";

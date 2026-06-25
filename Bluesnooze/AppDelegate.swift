@@ -20,7 +20,7 @@ private enum AppLog {
 }
 
 @NSApplicationMain
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @IBOutlet weak var statusMenu: NSMenu!
     @IBOutlet weak var launchAtLoginMenuItem: NSMenuItem!
@@ -28,6 +28,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var hideIconTask: DispatchWorkItem?
+    private let statusPopover = NSPopover()
+    private let hideIconDelaySeconds = 15.0
+    private var statusPopoverClosedAt: Date?
     private let bluetoothWasOnBeforeSleepKey = "bluetoothWasOnBeforeSleep"
     private let wifiWasOnBeforeSleepKey = "wifiWasOnBeforeSleep"
     private let powerSourceMonitor = PowerSourceMonitor()
@@ -38,7 +41,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var lowBatteryTimedOut = false
     private var lowBatteryCanceled = false
     private var suppressedBatteryBucket: Int?
-    private let lowBatteryCountdownSeconds = 60
+    private var lowBatterySettings = LowBatterySettings(userDefaults: .standard)
+    private var lowBatteryReminderMenuItem: NSMenuItem?
+    private var lowBatterySettingsMenuItem: NSMenuItem?
+    private var lowBatteryThresholdLabel: NSTextField?
+    private var lowBatteryThresholdSlider: NSSlider?
+    private var lowBatteryForceHibernateCheckbox: NSButton?
+    private var lowBatteryCountdownLabel: NSTextField?
+    private var lowBatteryCountdownSlider: NSSlider?
+    private var launchAtLoginButton: NSButton?
+    private var toggleIconButton: NSButton?
+    private var lowBatteryReminderButton: NSButton?
+    private var versionLabel: NSTextField?
+    private let disabledLowBatteryControlAlpha = 0.45
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         initStatusItem()
@@ -68,49 +83,72 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // 显示临时图标的通用方法
     private func showTemporaryIcon() {
-        // 取消之前的隐藏任务
-        hideIconTask?.cancel()
-        
+        cancelHideIconTask()
+
         // 确保菜单栏图标可见
         statusItem.isVisible = true
-        
-        // 如果用户设置了隐藏图标，则在15秒后再次隐藏
-        if UserDefaults.standard.bool(forKey: "hideIcon") {
-            let task = DispatchWorkItem { [weak self] in
-                self?.statusItem.isVisible = false
-            }
-            hideIconTask = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 15.0, execute: task)
-        }
+
+        scheduleHideIconIfNeeded()
     }
 
     // MARK: Click handlers
 
-    @IBAction func launchAtLoginClicked(_ sender: NSMenuItem) {
+    @IBAction func launchAtLoginClicked(_ sender: Any) {
         LaunchAtLogin.isEnabled = !LaunchAtLogin.isEnabled
         setLaunchAtLoginState()
     }
 
-    @IBAction func toggleIconClicked(_ sender: NSMenuItem) {
+    @IBAction func toggleIconClicked(_ sender: Any) {
         let hideIcon = !UserDefaults.standard.bool(forKey: "hideIcon")
         UserDefaults.standard.set(hideIcon, forKey: "hideIcon")
         setToggleIconState()
         
         // 取消之前的隐藏任务
-        hideIconTask?.cancel()
+        cancelHideIconTask()
         
         // 立即应用图标显示设置，无需重启
         if hideIcon {
-            // 如果设置为隐藏图标，立即隐藏
-            statusItem.isVisible = false
+            if !statusPopover.isShown {
+                statusItem.isVisible = false
+            }
         } else {
             // 如果设置为显示图标，立即显示
             statusItem.isVisible = true
         }
     }
 
-    @IBAction func quitClicked(_ sender: NSMenuItem) {
+    @IBAction func quitClicked(_ sender: Any) {
         NSApplication.shared.terminate(self)
+    }
+
+    @objc private func statusItemClicked(_ sender: Any?) {
+        if statusPopover.isShown {
+            statusPopover.performClose(sender)
+            return
+        }
+
+        if let statusPopoverClosedAt,
+           Date().timeIntervalSince(statusPopoverClosedAt) < 0.25 {
+            return
+        }
+
+        showStatusPopover()
+    }
+
+    @objc private func lowBatteryReminderClicked(_ sender: NSMenuItem) {
+        updateLowBatterySettings(lowBatterySettings.with(isEnabled: !lowBatterySettings.isEnabled))
+    }
+
+    @objc private func lowBatteryThresholdChanged(_ sender: NSSlider) {
+        updateLowBatterySettings(lowBatterySettings.with(thresholdPercentage: sender.integerValue))
+    }
+
+    @objc private func lowBatteryForceHibernateClicked(_ sender: NSButton) {
+        updateLowBatterySettings(lowBatterySettings.with(forceHibernateOnTimeout: sender.state == .on))
+    }
+
+    @objc private func lowBatteryCountdownChanged(_ sender: NSSlider) {
+        updateLowBatterySettings(lowBatterySettings.with(countdownSeconds: sender.integerValue))
     }
 
     // MARK: Notification handlers
@@ -235,17 +273,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handlePowerSourceSnapshot(_ snapshot: PowerSourceSnapshot) {
-        guard snapshot.isBatteryPower,
+        guard lowBatterySettings.isEnabled,
+              snapshot.isBatteryPower,
               !snapshot.isCharging,
-              snapshot.chargePercentage < LowBatteryPolicy.warningThreshold else {
+              LowBatteryPolicy.bucket(for: snapshot.chargePercentage, settings: lowBatterySettings) != nil else {
             suppressedBatteryBucket = nil
             cancelLowBatteryWarning()
             return
         }
 
         guard lowBatteryAlert == nil,
-              LowBatteryPolicy.shouldStartWarning(for: snapshot, suppressedBucket: suppressedBatteryBucket),
-              let bucket = LowBatteryPolicy.bucket(for: snapshot.chargePercentage) else {
+              LowBatteryPolicy.shouldStartWarning(for: snapshot, settings: lowBatterySettings, suppressedBucket: suppressedBatteryBucket),
+              let bucket = LowBatteryPolicy.bucket(for: snapshot.chargePercentage, settings: lowBatterySettings) else {
             return
         }
 
@@ -255,14 +294,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showLowBatteryWarning(for snapshot: PowerSourceSnapshot, bucket: Int) {
         lowBatteryTimedOut = false
         lowBatteryCanceled = false
-        lowBatteryWarningDeadline = Date().addingTimeInterval(TimeInterval(lowBatteryCountdownSeconds))
+        lowBatteryWarningDeadline = Date().addingTimeInterval(TimeInterval(lowBatterySettings.countdownSeconds))
 
         let alert = NSAlert()
         alert.messageText = NSLocalizedString("Battery Low", comment: "Low battery alert title")
         alert.alertStyle = .critical
         alert.addButton(withTitle: NSLocalizedString("OK", comment: "Low battery alert confirmation button"))
         lowBatteryAlert = alert
-        updateLowBatteryAlertText(for: snapshot, remainingSeconds: lowBatteryCountdownSeconds)
+        updateLowBatteryAlertText(for: snapshot, remainingSeconds: lowBatterySettings.countdownSeconds)
 
         lowBatteryCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.tickLowBatteryCountdown(snapshot: snapshot)
@@ -279,7 +318,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if lowBatteryTimedOut {
-            forceHibernateIfStillNeeded()
+            if lowBatterySettings.forceHibernateOnTimeout {
+                forceHibernateIfStillNeeded()
+            } else {
+                suppressedBatteryBucket = bucket
+            }
             return
         }
 
@@ -290,7 +333,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func tickLowBatteryCountdown(snapshot: PowerSourceSnapshot) {
         if let currentSnapshot = powerSourceMonitor.currentSnapshot(),
-           !LowBatteryPolicy.shouldStartWarning(for: currentSnapshot, suppressedBucket: nil) {
+           !LowBatteryPolicy.shouldStartWarning(for: currentSnapshot, settings: lowBatterySettings, suppressedBucket: nil) {
             cancelLowBatteryWarning()
             return
         }
@@ -312,14 +355,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateLowBatteryAlertText(for snapshot: PowerSourceSnapshot, remainingSeconds: Int) {
-        lowBatteryAlert?.informativeText = String(
-            format: NSLocalizedString(
-                "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will hibernate this Mac.",
-                comment: "Low battery alert countdown text"
-            ),
-            snapshot.chargePercentage,
-            remainingSeconds
-        )
+        if lowBatterySettings.forceHibernateOnTimeout {
+            lowBatteryAlert?.informativeText = String(
+                format: NSLocalizedString(
+                    "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will hibernate this Mac.",
+                    comment: "Low battery alert countdown text"
+                ),
+                snapshot.chargePercentage,
+                remainingSeconds
+            )
+        } else {
+            lowBatteryAlert?.informativeText = String(
+                format: NSLocalizedString(
+                    "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will close this reminder.",
+                    comment: "Low battery alert countdown text without hibernation"
+                ),
+                snapshot.chargePercentage,
+                remainingSeconds
+            )
+        }
     }
 
     private func cancelLowBatteryWarning() {
@@ -336,7 +390,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func forceHibernateIfStillNeeded() {
         guard let snapshot = powerSourceMonitor.currentSnapshot(),
-              LowBatteryPolicy.shouldStartWarning(for: snapshot, suppressedBucket: nil) else {
+              LowBatteryPolicy.shouldStartWarning(for: snapshot, settings: lowBatterySettings, suppressedBucket: nil) else {
             AppLog.hibernate.info("Skipping forced hibernation because the low-battery condition no longer applies.")
             return
         }
@@ -375,28 +429,262 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             statusItem.button?.title = "XSnooze"
         }
-        statusItem.menu = statusMenu
+        statusItem.menu = nil
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(statusItemClicked(_:))
         statusItem.isVisible = true // 确保图标可见
-        
-        // 如果用户设置了隐藏图标，则在15秒后自动隐藏
-        if UserDefaults.standard.bool(forKey: "hideIcon") {
-            let task = DispatchWorkItem { [weak self] in
-                self?.statusItem.isVisible = false
-            }
-            hideIconTask = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + 15.0, execute: task)
-        }
+        setupStatusPopover()
+        scheduleHideIconIfNeeded()
     }
 
     private func setLaunchAtLoginState() {
         let state = LaunchAtLogin.isEnabled ? NSControl.StateValue.on : NSControl.StateValue.off
         launchAtLoginMenuItem.state = state
+        launchAtLoginButton?.state = state
     }
     
     private func setToggleIconState() {
         let hideIcon = UserDefaults.standard.bool(forKey: "hideIcon")
         let state = hideIcon ? NSControl.StateValue.on : NSControl.StateValue.off
         toggleIconMenuItem.state = state
+        toggleIconButton?.state = state
+    }
+
+    private func setupStatusPopover() {
+        statusPopover.behavior = .transient
+        statusPopover.delegate = self
+        statusPopover.contentViewController = NSViewController()
+        statusPopover.contentViewController?.view = makeStatusPopoverView()
+    }
+
+    private func showStatusPopover() {
+        guard let button = statusItem.button else {
+            return
+        }
+
+        statusItem.isVisible = true
+        cancelHideIconTask()
+        setLaunchAtLoginState()
+        setToggleIconState()
+        setLowBatteryMenuState()
+        statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        statusPopoverClosedAt = Date()
+        scheduleHideIconIfNeeded()
+    }
+
+    private func cancelHideIconTask() {
+        hideIconTask?.cancel()
+        hideIconTask = nil
+    }
+
+    private func scheduleHideIconIfNeeded() {
+        guard UserDefaults.standard.bool(forKey: "hideIcon"),
+              !statusPopover.isShown else {
+            return
+        }
+
+        let task = DispatchWorkItem { [weak self] in
+            guard let self, !self.statusPopover.isShown else {
+                return
+            }
+
+            self.statusItem.isVisible = false
+            self.hideIconTask = nil
+        }
+        hideIconTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + hideIconDelaySeconds, execute: task)
+    }
+
+    private func makeStatusPopoverView() -> NSView {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 236))
+
+        let launchButton = makeMenuCheckbox(
+            title: NSLocalizedString("Launch at login", comment: "Launch at login menu item"),
+            action: #selector(launchAtLoginClicked(_:))
+        )
+        launchButton.frame = NSRect(x: 14, y: 200, width: 292, height: 22)
+        view.addSubview(launchButton)
+
+        let toggleIconButton = makeMenuCheckbox(
+            title: NSLocalizedString("Hide menu bar icon", comment: "Hide menu bar icon menu item"),
+            action: #selector(toggleIconClicked(_:))
+        )
+        toggleIconButton.frame = NSRect(x: 14, y: 172, width: 292, height: 22)
+        view.addSubview(toggleIconButton)
+
+        view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 158, width: 320, height: 1)))
+
+        let lowBatteryReminderButton = makeMenuCheckbox(
+            title: NSLocalizedString("Low Battery Reminder", comment: "Low battery reminder menu item"),
+            action: #selector(lowBatteryReminderClicked(_:))
+        )
+        lowBatteryReminderButton.frame = NSRect(x: 14, y: 130, width: 292, height: 22)
+        view.addSubview(lowBatteryReminderButton)
+
+        let thresholdLabel = makeLowBatteryLabel()
+        thresholdLabel.frame = NSRect(x: 42, y: 102, width: 132, height: 18)
+        view.addSubview(thresholdLabel)
+
+        let thresholdSlider = makeLowBatterySlider(
+            minValue: Double(LowBatterySettings.thresholdRange.lowerBound),
+            maxValue: Double(LowBatterySettings.thresholdRange.upperBound),
+            action: #selector(lowBatteryThresholdChanged(_:))
+        )
+        thresholdSlider.frame = NSRect(x: 180, y: 99, width: 114, height: 24)
+        view.addSubview(thresholdSlider)
+
+        let forceHibernateCheckbox = NSButton(
+            checkboxWithTitle: NSLocalizedString("Hibernate if no response", comment: "Low battery force hibernation checkbox"),
+            target: self,
+            action: #selector(lowBatteryForceHibernateClicked(_:))
+        )
+        forceHibernateCheckbox.font = .menuFont(ofSize: 13)
+        forceHibernateCheckbox.frame = NSRect(x: 40, y: 72, width: 266, height: 20)
+        view.addSubview(forceHibernateCheckbox)
+
+        let countdownLabel = makeLowBatteryLabel()
+        countdownLabel.frame = NSRect(x: 42, y: 46, width: 132, height: 18)
+        view.addSubview(countdownLabel)
+
+        let countdownSlider = makeLowBatterySlider(
+            minValue: Double(LowBatterySettings.countdownRange.lowerBound),
+            maxValue: Double(LowBatterySettings.countdownRange.upperBound),
+            action: #selector(lowBatteryCountdownChanged(_:))
+        )
+        countdownSlider.frame = NSRect(x: 180, y: 43, width: 114, height: 24)
+        view.addSubview(countdownSlider)
+
+        view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 32, width: 320, height: 1)))
+
+        let quitButton = NSButton(
+            title: NSLocalizedString("Quit", comment: "Quit menu item"),
+            target: self,
+            action: #selector(quitClicked(_:))
+        )
+        quitButton.isBordered = false
+        quitButton.alignment = .left
+        quitButton.font = .menuFont(ofSize: 13)
+        quitButton.frame = NSRect(x: 18, y: 2, width: 140, height: 28)
+        view.addSubview(quitButton)
+
+        let versionLabel = NSTextField(labelWithString: appVersionText())
+        versionLabel.alignment = .right
+        versionLabel.font = .menuFont(ofSize: 12)
+        versionLabel.textColor = .secondaryLabelColor
+        versionLabel.frame = NSRect(x: 168, y: 7, width: 126, height: 18)
+        view.addSubview(versionLabel)
+
+        self.launchAtLoginButton = launchButton
+        self.toggleIconButton = toggleIconButton
+        self.lowBatteryReminderButton = lowBatteryReminderButton
+        self.versionLabel = versionLabel
+        lowBatteryThresholdLabel = thresholdLabel
+        lowBatteryThresholdSlider = thresholdSlider
+        lowBatteryForceHibernateCheckbox = forceHibernateCheckbox
+        lowBatteryCountdownLabel = countdownLabel
+        lowBatteryCountdownSlider = countdownSlider
+
+        return view
+    }
+
+    private func makeMenuCheckbox(title: String, action: Selector) -> NSButton {
+        let button = NSButton(checkboxWithTitle: title, target: self, action: action)
+        button.font = .menuFont(ofSize: 13)
+        return button
+    }
+
+    private func makeSeparator(frame: NSRect) -> NSBox {
+        let separator = NSBox(frame: frame)
+        separator.boxType = .separator
+        return separator
+    }
+
+    private func appVersionText() -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.5.2"
+        return "v\(version)"
+    }
+
+    private func makeLowBatteryLabel() -> NSTextField {
+        let label = NSTextField(labelWithString: "")
+        label.font = .menuFont(ofSize: 13)
+        label.lineBreakMode = .byTruncatingTail
+        return label
+    }
+
+    private func makeLowBatterySlider(minValue: Double, maxValue: Double, action: Selector) -> NSSlider {
+        let slider = NSSlider(value: minValue, minValue: minValue, maxValue: maxValue, target: self, action: action)
+        slider.isContinuous = true
+        return slider
+    }
+
+    private func updateLowBatterySettings(_ settings: LowBatterySettings) {
+        lowBatterySettings = settings
+        settings.save(to: .standard)
+        setLowBatteryMenuState()
+
+        if !settings.isEnabled {
+            suppressedBatteryBucket = nil
+            cancelLowBatteryWarning()
+            return
+        }
+
+        guard let snapshot = powerSourceMonitor.currentSnapshot() else {
+            return
+        }
+
+        if !LowBatteryPolicy.shouldStartWarning(for: snapshot, settings: settings, suppressedBucket: nil) {
+            suppressedBatteryBucket = nil
+            cancelLowBatteryWarning()
+        } else if lowBatteryAlert != nil {
+            let remainingSeconds = lowBatteryWarningDeadline.map { max(0, Int(ceil($0.timeIntervalSinceNow))) } ?? settings.countdownSeconds
+            updateLowBatteryAlertText(for: snapshot, remainingSeconds: remainingSeconds)
+        } else {
+            handlePowerSourceSnapshot(snapshot)
+        }
+    }
+
+    private func setLowBatteryMenuState() {
+        lowBatteryReminderMenuItem?.state = lowBatterySettings.isEnabled ? .on : .off
+        lowBatteryReminderButton?.state = lowBatterySettings.isEnabled ? .on : .off
+        lowBatteryThresholdLabel?.stringValue = String(
+            format: NSLocalizedString("Remind below %d%%", comment: "Low battery threshold label"),
+            lowBatterySettings.thresholdPercentage
+        )
+        lowBatteryThresholdSlider?.integerValue = lowBatterySettings.thresholdPercentage
+        lowBatteryForceHibernateCheckbox?.state = lowBatterySettings.forceHibernateOnTimeout ? .on : .off
+        lowBatteryCountdownLabel?.stringValue = String(
+            format: NSLocalizedString("Countdown %ds", comment: "Low battery countdown label"),
+            lowBatterySettings.countdownSeconds
+        )
+        lowBatteryCountdownSlider?.integerValue = lowBatterySettings.countdownSeconds
+
+        applyLowBatteryState(
+            isEnabled: lowBatterySettings.isEnabled,
+            label: lowBatteryThresholdLabel,
+            slider: lowBatteryThresholdSlider
+        )
+
+        lowBatteryForceHibernateCheckbox?.isEnabled = lowBatterySettings.isEnabled
+        lowBatteryForceHibernateCheckbox?.alphaValue = 1.0
+
+        applyLowBatteryState(
+            isEnabled: lowBatterySettings.canEditCountdown,
+            label: lowBatteryCountdownLabel,
+            slider: lowBatteryCountdownSlider
+        )
+
+        versionLabel?.stringValue = appVersionText()
+    }
+
+    private func applyLowBatteryState(isEnabled: Bool, label: NSTextField?, slider: NSSlider?) {
+        label?.isEnabled = isEnabled
+        label?.alphaValue = 1.0
+        label?.textColor = isEnabled ? .labelColor : .disabledControlTextColor
+        slider?.isEnabled = isEnabled
+        slider?.alphaValue = isEnabled ? 1.0 : disabledLowBatteryControlAlpha
     }
     
     // MARK: Bluetooth permission handling
