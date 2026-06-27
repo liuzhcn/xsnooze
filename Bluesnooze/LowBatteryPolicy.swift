@@ -16,6 +16,7 @@ struct LowBatterySettings: Equatable {
     static let defaultThresholdPercentage = 30
     static let defaultForceHibernateOnTimeout = true
     static let defaultCountdownSeconds = 60
+    static let adjustmentStep = 5
     static let thresholdRange = 10...40
     static let countdownRange = 15...300
 
@@ -35,9 +36,9 @@ struct LowBatterySettings: Equatable {
         countdownSeconds: Int = defaultCountdownSeconds
     ) {
         self.isEnabled = isEnabled
-        self.thresholdPercentage = Self.clamp(thresholdPercentage, to: Self.thresholdRange)
+        self.thresholdPercentage = Self.normalizedValue(thresholdPercentage, in: Self.thresholdRange)
         self.forceHibernateOnTimeout = forceHibernateOnTimeout
-        self.countdownSeconds = Self.clamp(countdownSeconds, to: Self.countdownRange)
+        self.countdownSeconds = Self.normalizedValue(countdownSeconds, in: Self.countdownRange)
     }
 
     init(userDefaults: UserDefaults) {
@@ -77,6 +78,15 @@ struct LowBatterySettings: Equatable {
 
     private static func clamp(_ value: Int, to range: ClosedRange<Int>) -> Int {
         min(max(value, range.lowerBound), range.upperBound)
+    }
+
+    static func steppedValue(from value: Int, delta: Int, in range: ClosedRange<Int>) -> Int {
+        normalizedValue(value + delta, in: range)
+    }
+
+    private static func normalizedValue(_ value: Int, in range: ClosedRange<Int>) -> Int {
+        let rounded = Int((Double(value) / Double(adjustmentStep)).rounded()) * adjustmentStep
+        return clamp(rounded, to: range)
     }
 }
 

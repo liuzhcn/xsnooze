@@ -41,6 +41,35 @@ struct LowBatteryPolicyTests {
         assertEqual(LowBatteryPolicy.bucket(for: 10, settings: lowThresholdSettings), nil, "10 percent should not trigger when threshold is 10")
         assertEqual(LowBatteryPolicy.bucket(for: 9, settings: lowThresholdSettings), 9, "9 percent should trigger when threshold is 10")
 
+        let normalizedSettings = LowBatterySettings(thresholdPercentage: 33, countdownSeconds: 62)
+        assertEqual(normalizedSettings.thresholdPercentage, 35, "Threshold should snap to the nearest 5 percent")
+        assertEqual(normalizedSettings.countdownSeconds, 60, "Countdown should snap to the nearest 5 seconds")
+
+        let clampedNormalizedSettings = LowBatterySettings(thresholdPercentage: 43, countdownSeconds: 13)
+        assertEqual(clampedNormalizedSettings.thresholdPercentage, 40, "Threshold should clamp after snapping")
+        assertEqual(clampedNormalizedSettings.countdownSeconds, 15, "Countdown should clamp after snapping")
+
+        assertEqual(
+            LowBatterySettings.steppedValue(from: 30, delta: -LowBatterySettings.adjustmentStep, in: LowBatterySettings.thresholdRange),
+            25,
+            "Threshold decrement should move by one adjustment step"
+        )
+        assertEqual(
+            LowBatterySettings.steppedValue(from: 40, delta: LowBatterySettings.adjustmentStep, in: LowBatterySettings.thresholdRange),
+            40,
+            "Threshold increment should not exceed the maximum"
+        )
+        assertEqual(
+            LowBatterySettings.steppedValue(from: 15, delta: -LowBatterySettings.adjustmentStep, in: LowBatterySettings.countdownRange),
+            15,
+            "Countdown decrement should not go below the minimum"
+        )
+        assertEqual(
+            LowBatterySettings.steppedValue(from: 295, delta: LowBatterySettings.adjustmentStep, in: LowBatterySettings.countdownRange),
+            300,
+            "Countdown increment should reach the maximum"
+        )
+
         let unpluggedLowBattery = PowerSourceSnapshot(isBatteryPower: true, isCharging: false, chargePercentage: 29)
         assertTrue(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: defaultSettings, suppressedBucket: nil), "29 percent on battery should trigger")
         assertFalse(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: defaultSettings, suppressedBucket: 29), "Confirmed bucket should not repeat")

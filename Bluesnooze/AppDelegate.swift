@@ -33,6 +33,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusPopoverClosedAt: Date?
     private let bluetoothWasOnBeforeSleepKey = "bluetoothWasOnBeforeSleep"
     private let wifiWasOnBeforeSleepKey = "wifiWasOnBeforeSleep"
+    private var cachedBluetoothWasOn = false
+    private var cachedWiFiWasOn = false
+    private var wirelessStateRefreshTimer: Timer?
+    private var bluetoothVerificationID = 0
+    private var wifiVerificationID = 0
     private let powerSourceMonitor = PowerSourceMonitor()
     private let privilegedHelperClient = PrivilegedHelperClient()
     private var lowBatteryAlert: NSAlert?
@@ -45,10 +50,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var lowBatteryReminderMenuItem: NSMenuItem?
     private var lowBatterySettingsMenuItem: NSMenuItem?
     private var lowBatteryThresholdLabel: NSTextField?
-    private var lowBatteryThresholdSlider: NSSlider?
+    private var lowBatteryThresholdValueLabel: NSTextField?
+    private var lowBatteryThresholdDecrementButton: NSButton?
+    private var lowBatteryThresholdIncrementButton: NSButton?
     private var lowBatteryForceHibernateCheckbox: NSButton?
     private var lowBatteryCountdownLabel: NSTextField?
-    private var lowBatteryCountdownSlider: NSSlider?
+    private var lowBatteryCountdownValueLabel: NSTextField?
+    private var lowBatteryCountdownDecrementButton: NSButton?
+    private var lowBatteryCountdownIncrementButton: NSButton?
     private var launchAtLoginButton: NSButton?
     private var toggleIconButton: NSButton?
     private var lowBatteryReminderButton: NSButton?
@@ -61,6 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setToggleIconState()
         setupNotificationHandlers()
         privilegedHelperClient.restoreHibernationModeIfNeeded()
+        setupWirelessStateRefresh()
         setupLowBatteryMonitor()
     }
     
@@ -139,16 +149,48 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         updateLowBatterySettings(lowBatterySettings.with(isEnabled: !lowBatterySettings.isEnabled))
     }
 
-    @objc private func lowBatteryThresholdChanged(_ sender: NSSlider) {
-        updateLowBatterySettings(lowBatterySettings.with(thresholdPercentage: sender.integerValue))
+    @objc private func lowBatteryThresholdDecrementClicked(_ sender: NSButton) {
+        updateLowBatterySettings(lowBatterySettings.with(
+            thresholdPercentage: LowBatterySettings.steppedValue(
+                from: lowBatterySettings.thresholdPercentage,
+                delta: -LowBatterySettings.adjustmentStep,
+                in: LowBatterySettings.thresholdRange
+            )
+        ))
+    }
+
+    @objc private func lowBatteryThresholdIncrementClicked(_ sender: NSButton) {
+        updateLowBatterySettings(lowBatterySettings.with(
+            thresholdPercentage: LowBatterySettings.steppedValue(
+                from: lowBatterySettings.thresholdPercentage,
+                delta: LowBatterySettings.adjustmentStep,
+                in: LowBatterySettings.thresholdRange
+            )
+        ))
     }
 
     @objc private func lowBatteryForceHibernateClicked(_ sender: NSButton) {
         updateLowBatterySettings(lowBatterySettings.with(forceHibernateOnTimeout: sender.state == .on))
     }
 
-    @objc private func lowBatteryCountdownChanged(_ sender: NSSlider) {
-        updateLowBatterySettings(lowBatterySettings.with(countdownSeconds: sender.integerValue))
+    @objc private func lowBatteryCountdownDecrementClicked(_ sender: NSButton) {
+        updateLowBatterySettings(lowBatterySettings.with(
+            countdownSeconds: LowBatterySettings.steppedValue(
+                from: lowBatterySettings.countdownSeconds,
+                delta: -LowBatterySettings.adjustmentStep,
+                in: LowBatterySettings.countdownRange
+            )
+        ))
+    }
+
+    @objc private func lowBatteryCountdownIncrementClicked(_ sender: NSButton) {
+        updateLowBatterySettings(lowBatterySettings.with(
+            countdownSeconds: LowBatterySettings.steppedValue(
+                from: lowBatterySettings.countdownSeconds,
+                delta: LowBatterySettings.adjustmentStep,
+                in: LowBatterySettings.countdownRange
+            )
+        ))
     }
 
     // MARK: Notification handlers
@@ -163,63 +205,69 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc func onPowerDown(note: NSNotification) {
-        AppLog.power.info("Sleep notification received.")
-        let bluetoothWasOn = isBluetoothOn()
-        let wifiWasOn = isWiFiOn()
-        AppLog.power.info("Stored pre-sleep wireless state. bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
-        UserDefaults.standard.set(bluetoothWasOn, forKey: bluetoothWasOnBeforeSleepKey)
-        UserDefaults.standard.set(wifiWasOn, forKey: wifiWasOnBeforeSleepKey)
+        AppLog.power.notice("Sleep notification received.")
+        let decision = WirelessSleepPolicy.sleepActions(
+            cachedBluetoothWasOn: cachedBluetoothWasOn,
+            cachedWiFiWasOn: cachedWiFiWasOn,
+            readCurrentBluetoothState: isBluetoothOn,
+            readCurrentWiFiState: isWiFiOn
+        )
+        AppLog.power.notice("Stored cached pre-sleep wireless state. bluetoothWasOn=\(decision.bluetoothWasOn, privacy: .public), wifiWasOn=\(decision.wifiWasOn, privacy: .public)")
+        UserDefaults.standard.set(decision.bluetoothWasOn, forKey: bluetoothWasOnBeforeSleepKey)
+        UserDefaults.standard.set(decision.wifiWasOn, forKey: wifiWasOnBeforeSleepKey)
 
-        if bluetoothWasOn {
-            if hasBluetoothPermission() {
-                setBluetooth(powerOn: false)
-            } else {
-                AppLog.bluetooth.warning("Skipping Bluetooth off request because Bluetooth permission is unavailable.")
-            }
+        if decision.shouldTurnBluetoothOff {
+            setBluetooth(powerOn: false, verify: false)
+            verifyBluetoothPowerStateAsync(requestedPowerOn: false, reason: "sleep")
         } else {
-            AppLog.bluetooth.info("Skipping Bluetooth off request because Bluetooth was not on before sleep.")
+            AppLog.bluetooth.notice("Skipping Bluetooth off request because Bluetooth was not on before sleep.")
         }
 
-        if wifiWasOn {
-            setWiFi(powerOn: false)
+        if decision.shouldTurnWiFiOff {
+            setWiFi(powerOn: false, verify: false)
+            verifyWiFiPowerStateAsync(requestedPowerOn: false, reason: "sleep")
         } else {
-            AppLog.wifi.info("Skipping Wi-Fi off request because Wi-Fi was not on before sleep.")
+            AppLog.wifi.notice("Skipping Wi-Fi off request because Wi-Fi was not on before sleep.")
         }
     }
 
     @objc func onPowerUp(note: NSNotification) {
-        AppLog.power.info("Wake notification received.")
+        AppLog.power.notice("Wake notification received.")
         let bluetoothWasOn = UserDefaults.standard.bool(forKey: bluetoothWasOnBeforeSleepKey)
         let wifiWasOn = UserDefaults.standard.bool(forKey: wifiWasOnBeforeSleepKey)
-        AppLog.power.info("Loaded pre-sleep wireless state. bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
+        AppLog.power.notice("Loaded pre-sleep wireless state. bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
 
         privilegedHelperClient.restoreHibernationModeIfNeeded()
 
-        if bluetoothWasOn && hasBluetoothPermission() {
-            setBluetooth(powerOn: true)
-        } else if bluetoothWasOn {
-            AppLog.bluetooth.warning("Skipping Bluetooth on request because Bluetooth permission is unavailable.")
+        if bluetoothWasOn {
+            setBluetooth(powerOn: true, verify: false)
+            verifyBluetoothPowerStateAsync(requestedPowerOn: true, reason: "wake")
         } else {
-            AppLog.bluetooth.info("Skipping Bluetooth on request because Bluetooth was not on before sleep.")
+            AppLog.bluetooth.notice("Skipping Bluetooth on request because Bluetooth was not on before sleep.")
         }
 
         if wifiWasOn {
-            setWiFi(powerOn: true)
+            setWiFi(powerOn: true, verify: false)
+            verifyWiFiPowerStateAsync(requestedPowerOn: true, reason: "wake")
         } else {
-            AppLog.wifi.info("Skipping Wi-Fi on request because Wi-Fi was not on before sleep.")
+            AppLog.wifi.notice("Skipping Wi-Fi on request because Wi-Fi was not on before sleep.")
         }
 
         clearStoredPowerStates()
+        refreshWirelessStateCache(reason: "wake")
     }
 
-    private func setBluetooth(powerOn: Bool) {
-        AppLog.bluetooth.info("Requesting Bluetooth power state. powerOn=\(powerOn, privacy: .public)")
+    private func setBluetooth(powerOn: Bool, verify: Bool = true) {
+        AppLog.bluetooth.notice("Requesting Bluetooth power state. powerOn=\(powerOn, privacy: .public)")
         IOBluetoothPreferenceSetControllerPowerState(powerOn ? 1 : 0)
-        if hasBluetoothPermission() {
+        cachedBluetoothWasOn = powerOn
+        if verify, hasBluetoothPermission() {
             let observedPowerOn = isBluetoothOn()
-            AppLog.bluetooth.info("Bluetooth power request completed. requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
-        } else {
+            AppLog.bluetooth.notice("Bluetooth power request completed. requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
+        } else if verify {
             AppLog.bluetooth.warning("Bluetooth power request completed, but observed state cannot be read because Bluetooth permission is unavailable.")
+        } else {
+            AppLog.bluetooth.notice("Bluetooth power request completed without immediate verification. requestedPowerOn=\(powerOn, privacy: .public)")
         }
     }
 
@@ -232,8 +280,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return bluetoothController.powerState == kBluetoothHCIPowerStateON
     }
 
-    private func setWiFi(powerOn: Bool) {
-        AppLog.wifi.info("Requesting Wi-Fi power state. powerOn=\(powerOn, privacy: .public)")
+    private func setWiFi(powerOn: Bool, verify: Bool = true) {
+        AppLog.wifi.notice("Requesting Wi-Fi power state. powerOn=\(powerOn, privacy: .public)")
         guard let interface = CWWiFiClient.shared().interface() else {
             AppLog.wifi.error("No Wi-Fi interface found.")
             return
@@ -241,7 +289,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         do {
             try interface.setPower(powerOn)
-            AppLog.wifi.info("Wi-Fi power request completed. powerOn=\(powerOn, privacy: .public)")
+            cachedWiFiWasOn = powerOn
+            if verify {
+                let observedPowerOn = interface.powerOn()
+                AppLog.wifi.notice("Wi-Fi power request completed. requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
+            } else {
+                AppLog.wifi.notice("Wi-Fi power request completed without immediate verification. requestedPowerOn=\(powerOn, privacy: .public)")
+            }
         } catch {
             AppLog.wifi.error("Failed to set Wi-Fi power state. powerOn=\(powerOn, privacy: .public), error=\(error.localizedDescription, privacy: .public)")
         }
@@ -255,10 +309,94 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return interface.powerOn()
     }
 
+    private func verifyBluetoothPowerStateAsync(requestedPowerOn: Bool, reason: String, timeout: TimeInterval = 2.0) {
+        bluetoothVerificationID += 1
+        let verificationID = bluetoothVerificationID
+        var completed = false
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let observedPowerOn = self?.isBluetoothOn() ?? false
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.bluetoothVerificationID == verificationID, !completed else {
+                    return
+                }
+
+                completed = true
+                self.cachedBluetoothWasOn = observedPowerOn
+                AppLog.bluetooth.notice("Bluetooth power verification completed. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            guard let self, self.bluetoothVerificationID == verificationID, !completed else {
+                return
+            }
+
+            completed = true
+            AppLog.bluetooth.warning("Bluetooth power verification timed out. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), timeoutSeconds=\(timeout, privacy: .public)")
+        }
+    }
+
+    private func verifyWiFiPowerStateAsync(requestedPowerOn: Bool, reason: String, timeout: TimeInterval = 2.0) {
+        wifiVerificationID += 1
+        let verificationID = wifiVerificationID
+        var completed = false
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let observedPowerOn = self?.isWiFiOn() ?? false
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.wifiVerificationID == verificationID, !completed else {
+                    return
+                }
+
+                completed = true
+                self.cachedWiFiWasOn = observedPowerOn
+                AppLog.wifi.notice("Wi-Fi power verification completed. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            guard let self, self.wifiVerificationID == verificationID, !completed else {
+                return
+            }
+
+            completed = true
+            AppLog.wifi.warning("Wi-Fi power verification timed out. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), timeoutSeconds=\(timeout, privacy: .public)")
+        }
+    }
+
+    private func setupWirelessStateRefresh() {
+        refreshWirelessStateCache(reason: "launch")
+        wirelessStateRefreshTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            self?.refreshWirelessStateCache(reason: "timer")
+        }
+    }
+
+    private func refreshWirelessStateCache(reason: String) {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else {
+                return
+            }
+
+            let bluetoothWasOn = self.isBluetoothOn()
+            let wifiWasOn = self.isWiFiOn()
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    return
+                }
+
+                self.cachedBluetoothWasOn = bluetoothWasOn
+                self.cachedWiFiWasOn = wifiWasOn
+                AppLog.power.info("Refreshed wireless state cache. reason=\(reason, privacy: .public), bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
+            }
+        }
+    }
+
     private func clearStoredPowerStates() {
         UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
         UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
-        AppLog.power.info("Cleared stored pre-sleep wireless state.")
+        AppLog.power.notice("Cleared stored pre-sleep wireless state.")
     }
 
     // MARK: Low battery hibernation
@@ -391,14 +529,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func forceHibernateIfStillNeeded() {
         guard let snapshot = powerSourceMonitor.currentSnapshot(),
               LowBatteryPolicy.shouldStartWarning(for: snapshot, settings: lowBatterySettings, suppressedBucket: nil) else {
-            AppLog.hibernate.info("Skipping forced hibernation because the low-battery condition no longer applies.")
+            AppLog.hibernate.notice("Skipping forced hibernation because the low-battery condition no longer applies.")
             return
         }
 
-        AppLog.hibernate.info("Requesting forced low-battery hibernation. chargePercentage=\(snapshot.chargePercentage, privacy: .public)")
+        AppLog.hibernate.notice("Requesting forced low-battery hibernation. chargePercentage=\(snapshot.chargePercentage, privacy: .public)")
         privilegedHelperClient.prepareHibernateAndSleep { [weak self] success, message in
             guard !success else {
-                AppLog.hibernate.info("Forced low-battery hibernation request succeeded.")
+                AppLog.hibernate.notice("Forced low-battery hibernation request succeeded.")
                 return
             }
 
@@ -525,16 +663,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         view.addSubview(lowBatteryReminderButton)
 
         let thresholdLabel = makeLowBatteryLabel()
-        thresholdLabel.frame = NSRect(x: 42, y: 102, width: 132, height: 18)
+        thresholdLabel.frame = NSRect(x: 42, y: 102, width: 160, height: 18)
         view.addSubview(thresholdLabel)
 
-        let thresholdSlider = makeLowBatterySlider(
-            minValue: Double(LowBatterySettings.thresholdRange.lowerBound),
-            maxValue: Double(LowBatterySettings.thresholdRange.upperBound),
-            action: #selector(lowBatteryThresholdChanged(_:))
+        let thresholdStepper = makeLowBatteryStepper(
+            valueWidth: 42,
+            decrementAction: #selector(lowBatteryThresholdDecrementClicked(_:)),
+            incrementAction: #selector(lowBatteryThresholdIncrementClicked(_:))
         )
-        thresholdSlider.frame = NSRect(x: 180, y: 99, width: 114, height: 24)
-        view.addSubview(thresholdSlider)
+        thresholdStepper.decrementButton.frame.origin = NSPoint(x: 204, y: 96)
+        thresholdStepper.valueLabel.frame.origin = NSPoint(x: 236, y: 99)
+        thresholdStepper.incrementButton.frame.origin = NSPoint(x: 284, y: 96)
+        view.addSubview(thresholdStepper.decrementButton)
+        view.addSubview(thresholdStepper.valueLabel)
+        view.addSubview(thresholdStepper.incrementButton)
 
         let forceHibernateCheckbox = NSButton(
             checkboxWithTitle: NSLocalizedString("Hibernate if no response", comment: "Low battery force hibernation checkbox"),
@@ -546,16 +688,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         view.addSubview(forceHibernateCheckbox)
 
         let countdownLabel = makeLowBatteryLabel()
-        countdownLabel.frame = NSRect(x: 42, y: 46, width: 132, height: 18)
+        countdownLabel.frame = NSRect(x: 42, y: 46, width: 160, height: 18)
         view.addSubview(countdownLabel)
 
-        let countdownSlider = makeLowBatterySlider(
-            minValue: Double(LowBatterySettings.countdownRange.lowerBound),
-            maxValue: Double(LowBatterySettings.countdownRange.upperBound),
-            action: #selector(lowBatteryCountdownChanged(_:))
+        let countdownStepper = makeLowBatteryStepper(
+            valueWidth: 50,
+            decrementAction: #selector(lowBatteryCountdownDecrementClicked(_:)),
+            incrementAction: #selector(lowBatteryCountdownIncrementClicked(_:))
         )
-        countdownSlider.frame = NSRect(x: 180, y: 43, width: 114, height: 24)
-        view.addSubview(countdownSlider)
+        countdownStepper.decrementButton.frame.origin = NSPoint(x: 196, y: 40)
+        countdownStepper.valueLabel.frame.origin = NSPoint(x: 228, y: 43)
+        countdownStepper.incrementButton.frame.origin = NSPoint(x: 284, y: 40)
+        view.addSubview(countdownStepper.decrementButton)
+        view.addSubview(countdownStepper.valueLabel)
+        view.addSubview(countdownStepper.incrementButton)
 
         view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 32, width: 320, height: 1)))
 
@@ -582,10 +728,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         self.lowBatteryReminderButton = lowBatteryReminderButton
         self.versionLabel = versionLabel
         lowBatteryThresholdLabel = thresholdLabel
-        lowBatteryThresholdSlider = thresholdSlider
+        lowBatteryThresholdValueLabel = thresholdStepper.valueLabel
+        lowBatteryThresholdDecrementButton = thresholdStepper.decrementButton
+        lowBatteryThresholdIncrementButton = thresholdStepper.incrementButton
         lowBatteryForceHibernateCheckbox = forceHibernateCheckbox
         lowBatteryCountdownLabel = countdownLabel
-        lowBatteryCountdownSlider = countdownSlider
+        lowBatteryCountdownValueLabel = countdownStepper.valueLabel
+        lowBatteryCountdownDecrementButton = countdownStepper.decrementButton
+        lowBatteryCountdownIncrementButton = countdownStepper.incrementButton
 
         return view
     }
@@ -603,7 +753,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.5.2"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.0"
         return "v\(version)"
     }
 
@@ -614,10 +764,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return label
     }
 
-    private func makeLowBatterySlider(minValue: Double, maxValue: Double, action: Selector) -> NSSlider {
-        let slider = NSSlider(value: minValue, minValue: minValue, maxValue: maxValue, target: self, action: action)
-        slider.isContinuous = true
-        return slider
+    private func makeLowBatteryStepper(
+        valueWidth: CGFloat,
+        decrementAction: Selector,
+        incrementAction: Selector
+    ) -> (decrementButton: NSButton, valueLabel: NSTextField, incrementButton: NSButton) {
+        let decrementButton = makeStepButton(title: "-", action: decrementAction)
+        let valueLabel = NSTextField(labelWithString: "")
+        valueLabel.alignment = .center
+        valueLabel.font = .menuFont(ofSize: 13)
+        valueLabel.frame.size = NSSize(width: valueWidth, height: 18)
+        let incrementButton = makeStepButton(title: "+", action: incrementAction)
+        return (decrementButton, valueLabel, incrementButton)
+    }
+
+    private func makeStepButton(title: String, action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.isBordered = false
+        button.font = .menuFont(ofSize: 15)
+        button.alignment = .center
+        button.frame.size = NSSize(width: 28, height: 24)
+        return button
     }
 
     private func updateLowBatterySettings(_ settings: LowBatterySettings) {
@@ -649,42 +816,63 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func setLowBatteryMenuState() {
         lowBatteryReminderMenuItem?.state = lowBatterySettings.isEnabled ? .on : .off
         lowBatteryReminderButton?.state = lowBatterySettings.isEnabled ? .on : .off
-        lowBatteryThresholdLabel?.stringValue = String(
-            format: NSLocalizedString("Remind below %d%%", comment: "Low battery threshold label"),
+        lowBatteryThresholdLabel?.stringValue = NSLocalizedString("Battery alert threshold", comment: "Low battery threshold setting label")
+        lowBatteryThresholdValueLabel?.stringValue = String(
+            format: NSLocalizedString("%d%%", comment: "Low battery threshold value"),
             lowBatterySettings.thresholdPercentage
         )
-        lowBatteryThresholdSlider?.integerValue = lowBatterySettings.thresholdPercentage
         lowBatteryForceHibernateCheckbox?.state = lowBatterySettings.forceHibernateOnTimeout ? .on : .off
-        lowBatteryCountdownLabel?.stringValue = String(
-            format: NSLocalizedString("Countdown %ds", comment: "Low battery countdown label"),
+        lowBatteryCountdownLabel?.stringValue = NSLocalizedString("No response countdown", comment: "Low battery countdown setting label")
+        lowBatteryCountdownValueLabel?.stringValue = String(
+            format: NSLocalizedString("%ds", comment: "Low battery countdown value"),
             lowBatterySettings.countdownSeconds
         )
-        lowBatteryCountdownSlider?.integerValue = lowBatterySettings.countdownSeconds
 
         applyLowBatteryState(
             isEnabled: lowBatterySettings.isEnabled,
             label: lowBatteryThresholdLabel,
-            slider: lowBatteryThresholdSlider
+            valueLabel: lowBatteryThresholdValueLabel,
+            decrementButton: lowBatteryThresholdDecrementButton,
+            incrementButton: lowBatteryThresholdIncrementButton,
+            value: lowBatterySettings.thresholdPercentage,
+            range: LowBatterySettings.thresholdRange
         )
 
         lowBatteryForceHibernateCheckbox?.isEnabled = lowBatterySettings.isEnabled
-        lowBatteryForceHibernateCheckbox?.alphaValue = 1.0
+        lowBatteryForceHibernateCheckbox?.alphaValue = lowBatterySettings.isEnabled ? 1.0 : disabledLowBatteryControlAlpha
 
         applyLowBatteryState(
             isEnabled: lowBatterySettings.canEditCountdown,
             label: lowBatteryCountdownLabel,
-            slider: lowBatteryCountdownSlider
+            valueLabel: lowBatteryCountdownValueLabel,
+            decrementButton: lowBatteryCountdownDecrementButton,
+            incrementButton: lowBatteryCountdownIncrementButton,
+            value: lowBatterySettings.countdownSeconds,
+            range: LowBatterySettings.countdownRange
         )
 
         versionLabel?.stringValue = appVersionText()
     }
 
-    private func applyLowBatteryState(isEnabled: Bool, label: NSTextField?, slider: NSSlider?) {
+    private func applyLowBatteryState(
+        isEnabled: Bool,
+        label: NSTextField?,
+        valueLabel: NSTextField?,
+        decrementButton: NSButton?,
+        incrementButton: NSButton?,
+        value: Int,
+        range: ClosedRange<Int>
+    ) {
         label?.isEnabled = isEnabled
         label?.alphaValue = 1.0
         label?.textColor = isEnabled ? .labelColor : .disabledControlTextColor
-        slider?.isEnabled = isEnabled
-        slider?.alphaValue = isEnabled ? 1.0 : disabledLowBatteryControlAlpha
+        valueLabel?.isEnabled = isEnabled
+        valueLabel?.alphaValue = 1.0
+        valueLabel?.textColor = isEnabled ? .labelColor : .disabledControlTextColor
+        decrementButton?.isEnabled = isEnabled && value > range.lowerBound
+        incrementButton?.isEnabled = isEnabled && value < range.upperBound
+        decrementButton?.alphaValue = decrementButton?.isEnabled == true ? 1.0 : disabledLowBatteryControlAlpha
+        incrementButton?.alphaValue = incrementButton?.isEnabled == true ? 1.0 : disabledLowBatteryControlAlpha
     }
     
     // MARK: Bluetooth permission handling

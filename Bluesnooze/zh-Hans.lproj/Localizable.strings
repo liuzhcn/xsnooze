@@ -9,5 +9,9 @@
 "Quit" = "退出";
 "Low Battery Reminder" = "低电量提醒";
 "Remind below %d%%" = "低于 %d%% 时提醒";
+"Battery alert threshold" = "触发提醒的电量阈值：";
+"No response countdown" = "无人响应倒计时：";
+"%d%%" = "%d%%";
+"%ds" = "%d秒";
 "Hibernate if no response" = "无人响应时强制休眠";
 "Countdown %ds" = "倒计时 %d 秒";
