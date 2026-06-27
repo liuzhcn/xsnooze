@@ -1,2 +1,6 @@
 xcuserdata/
 Carthage
+.DS_Store
+build/
+DerivedData/
+dist/
