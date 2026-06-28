@@ -25,6 +25,11 @@ fi
 echo "Installing XSnooze privileged helper..."
 echo "Administrator password may be required."
 
+if sudo launchctl print "system/${HELPER_LABEL}" >/dev/null 2>&1; then
+  echo "Stopping existing XSnooze privileged helper..."
+  sudo launchctl bootout system "${PLIST_DEST}" || true
+fi
+
 sudo mkdir -p /Library/PrivilegedHelperTools
 sudo cp "${HELPER_SOURCE}" "${HELPER_DEST}"
 sudo chown root:wheel "${HELPER_DEST}"
@@ -58,13 +63,8 @@ rm -f "${TEMP_PLIST}"
 sudo chown root:wheel "${PLIST_DEST}"
 sudo chmod 644 "${PLIST_DEST}"
 
-if sudo launchctl print "system/${HELPER_LABEL}" >/dev/null 2>&1; then
-  sudo launchctl bootout system "${PLIST_DEST}" || true
-fi
-
 sudo launchctl bootstrap system "${PLIST_DEST}"
 sudo launchctl enable "system/${HELPER_LABEL}"
 
 echo "XSnooze privileged helper installed."
 echo "You can now run XSnooze.app."
-

@@ -19,6 +19,176 @@ private enum AppLog {
     static let hibernate = Logger(subsystem: "com.liuzhcn.XSnooze", category: "hibernate")
 }
 
+private final class PassthroughTextField: NSTextField {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+}
+
+private final class HoverMenuRowControl: NSControl {
+    private weak var checkmarkLabel: NSTextField?
+    private weak var titleLabel: NSTextField?
+    private var trackingArea: NSTrackingArea?
+    private var isHovered = false {
+        didSet {
+            guard isHovered != oldValue else {
+                return
+            }
+            updateTextColors()
+            needsDisplay = true
+        }
+    }
+
+    init(checkmarkLabel: NSTextField?, titleLabel: NSTextField?, target: AnyObject, action: Selector) {
+        self.checkmarkLabel = checkmarkLabel
+        self.titleLabel = titleLabel
+        super.init(frame: .zero)
+        self.target = target
+        self.action = action
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+    }
+
+    override var isEnabled: Bool {
+        didSet {
+            updateTextColors()
+            needsDisplay = true
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = isEnabled
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else {
+            return
+        }
+        sendAction(action, to: target)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard isHovered, isEnabled else {
+            return
+        }
+
+        NSColor(srgbRed: 0.35, green: 0.63, blue: 0.95, alpha: 1.0).setFill()
+        bounds.roundedPath(radius: 7).fill()
+    }
+
+    private func updateTextColors() {
+        let textColor: NSColor
+        if !isEnabled {
+            textColor = .disabledControlTextColor
+        } else {
+            textColor = isHovered ? .selectedMenuItemTextColor : .labelColor
+        }
+
+        checkmarkLabel?.textColor = textColor
+        titleLabel?.textColor = textColor
+    }
+}
+
+private final class HoverStepButton: NSButton {
+    private var trackingArea: NSTrackingArea?
+    private var isHovered = false {
+        didSet {
+            guard isHovered != oldValue else {
+                return
+            }
+            updateTitleColor()
+            needsDisplay = true
+        }
+    }
+
+    override var isEnabled: Bool {
+        didSet {
+            updateTitleColor()
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = isEnabled
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if isHovered, isEnabled {
+            NSColor(srgbRed: 0.35, green: 0.63, blue: 0.95, alpha: 1.0).setFill()
+            bounds.insetBy(dx: 3, dy: 2).roundedPath(radius: 5).fill()
+        }
+        drawCenteredSymbol()
+    }
+
+    private func updateTitleColor() {
+        needsDisplay = true
+    }
+
+    private func drawCenteredSymbol() {
+        let color: NSColor = isHovered && isEnabled ? .selectedMenuItemTextColor : (isEnabled ? .labelColor : .disabledControlTextColor)
+        let symbol = title == "-" ? "−" : title
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 17, weight: .regular),
+            .foregroundColor: color
+        ]
+        let size = symbol.size(withAttributes: attributes)
+        let origin = NSPoint(
+            x: bounds.midX - size.width / 2,
+            y: bounds.midY - size.height / 2 - 0.5
+        )
+        symbol.draw(at: origin, withAttributes: attributes)
+    }
+}
+
+private extension NSRect {
+    func roundedPath(radius: CGFloat) -> NSBezierPath {
+        NSBezierPath(roundedRect: self, xRadius: radius, yRadius: radius)
+    }
+}
+
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
@@ -31,6 +201,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let statusPopover = NSPopover()
     private let hideIconDelaySeconds = 15.0
     private var statusPopoverClosedAt: Date?
+    private var popoverEventMonitor: Any?
+    private var popoverGlobalEventMonitor: Any?
     private let bluetoothWasOnBeforeSleepKey = "bluetoothWasOnBeforeSleep"
     private let wifiWasOnBeforeSleepKey = "wifiWasOnBeforeSleep"
     private var cachedBluetoothWasOn = false
@@ -53,15 +225,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var lowBatteryThresholdValueLabel: NSTextField?
     private var lowBatteryThresholdDecrementButton: NSButton?
     private var lowBatteryThresholdIncrementButton: NSButton?
-    private var lowBatteryForceHibernateCheckbox: NSButton?
+    private var lowBatteryForceHibernateCheckbox: NSControl?
     private var lowBatteryCountdownLabel: NSTextField?
     private var lowBatteryCountdownValueLabel: NSTextField?
     private var lowBatteryCountdownDecrementButton: NSButton?
     private var lowBatteryCountdownIncrementButton: NSButton?
-    private var launchAtLoginButton: NSButton?
-    private var toggleIconButton: NSButton?
-    private var lowBatteryReminderButton: NSButton?
+    private var launchAtLoginButton: NSControl?
+    private var toggleIconButton: NSControl?
+    private var lowBatteryReminderButton: NSControl?
+    private var launchAtLoginCheckmark: NSTextField?
+    private var toggleIconCheckmark: NSTextField?
+    private var lowBatteryReminderCheckmark: NSTextField?
+    private var lowBatteryForceHibernateCheckmark: NSTextField?
+    private var lowBatteryForceHibernateTitleLabel: NSTextField?
     private var versionLabel: NSTextField?
+    private var logsWindow: NSWindow?
+    private var logsTextView: NSTextView?
+    private var logsRefreshButton: NSButton?
+    private var logsCopyButton: NSButton?
     private let disabledLowBatteryControlAlpha = 0.45
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -77,6 +258,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     // 处理应用程序被再次打开的情况
     func applicationWillBecomeActive(_ notification: Notification) {
         showTemporaryIcon()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        closeStatusPopoverIfNeeded()
     }
     
     // 处理应用程序被用户通过 Dock 或 Finder 打开的情况
@@ -145,6 +330,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         showStatusPopover()
     }
 
+    @objc private func showLogsClicked(_ sender: Any?) {
+        statusPopover.performClose(sender)
+        showLogsWindow()
+    }
+
+    @objc private func refreshLogsClicked(_ sender: Any?) {
+        refreshLogsWindow()
+    }
+
+    @objc private func copyLogsClicked(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(logsTextView?.string ?? "", forType: .string)
+    }
+
+    @objc private func closeLogsClicked(_ sender: Any?) {
+        logsWindow?.close()
+    }
+
     @objc private func lowBatteryReminderClicked(_ sender: NSMenuItem) {
         updateLowBatterySettings(lowBatterySettings.with(isEnabled: !lowBatterySettings.isEnabled))
     }
@@ -170,7 +374,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func lowBatteryForceHibernateClicked(_ sender: NSButton) {
-        updateLowBatterySettings(lowBatterySettings.with(forceHibernateOnTimeout: sender.state == .on))
+        updateLowBatterySettings(lowBatterySettings.with(forceHibernateOnTimeout: !lowBatterySettings.forceHibernateOnTimeout))
     }
 
     @objc private func lowBatteryCountdownDecrementClicked(_ sender: NSButton) {
@@ -557,11 +761,139 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         alert.runModal()
     }
 
+    // MARK: Log viewer
+
+    private func showLogsWindow() {
+        if logsWindow == nil {
+            logsWindow = makeLogsWindow()
+        }
+
+        logsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        refreshLogsWindow()
+    }
+
+    private func makeLogsWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 420),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = NSLocalizedString("XSnooze Logs", comment: "Log viewer window title")
+        window.isReleasedWhenClosed = false
+        window.center()
+
+        let contentView = NSView(frame: window.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 720, height: 420))
+        contentView.autoresizingMask = [.width, .height]
+        window.contentView = contentView
+
+        let scrollView = NSScrollView(frame: NSRect(x: 16, y: 58, width: 688, height: 346))
+        scrollView.autoresizingMask = [.width, .height]
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.borderType = .bezelBorder
+
+        let textView = NSTextView(frame: scrollView.bounds)
+        textView.autoresizingMask = [.width, .height]
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.string = NSLocalizedString("Loading logs...", comment: "Log viewer loading placeholder")
+        scrollView.documentView = textView
+        contentView.addSubview(scrollView)
+
+        let refreshButton = NSButton(
+            title: NSLocalizedString("Refresh", comment: "Refresh logs button"),
+            target: self,
+            action: #selector(refreshLogsClicked(_:))
+        )
+        refreshButton.frame = NSRect(x: 16, y: 16, width: 96, height: 28)
+        refreshButton.autoresizingMask = [.maxXMargin, .maxYMargin]
+        contentView.addSubview(refreshButton)
+
+        let copyButton = NSButton(
+            title: NSLocalizedString("Copy", comment: "Copy logs button"),
+            target: self,
+            action: #selector(copyLogsClicked(_:))
+        )
+        copyButton.frame = NSRect(x: 124, y: 16, width: 96, height: 28)
+        copyButton.autoresizingMask = [.maxXMargin, .maxYMargin]
+        contentView.addSubview(copyButton)
+
+        let closeButton = NSButton(
+            title: NSLocalizedString("Close", comment: "Close logs window button"),
+            target: self,
+            action: #selector(closeLogsClicked(_:))
+        )
+        closeButton.frame = NSRect(x: 608, y: 16, width: 96, height: 28)
+        closeButton.autoresizingMask = [.minXMargin, .maxYMargin]
+        contentView.addSubview(closeButton)
+
+        logsTextView = textView
+        logsRefreshButton = refreshButton
+        logsCopyButton = copyButton
+        return window
+    }
+
+    private func refreshLogsWindow() {
+        logsTextView?.string = NSLocalizedString("Loading logs...", comment: "Log viewer loading placeholder")
+        logsRefreshButton?.isEnabled = false
+        logsCopyButton?.isEnabled = false
+
+        DispatchQueue.global(qos: .utility).async {
+            let result = self.loadRecentLogs()
+            DispatchQueue.main.async { [weak self] in
+                self?.logsTextView?.string = result
+                self?.logsRefreshButton?.isEnabled = true
+                self?.logsCopyButton?.isEnabled = true
+            }
+        }
+    }
+
+    private func loadRecentLogs() -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: XSnoozeLogQuery.executablePath)
+        process.arguments = XSnoozeLogQuery.arguments
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            return String(
+                format: NSLocalizedString("Failed to load logs: %@", comment: "Log viewer process launch failure"),
+                error.localizedDescription
+            )
+        }
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let errorOutput = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard process.terminationStatus == 0 else {
+            let message = errorOutput.isEmpty ? output : errorOutput
+            return String(
+                format: NSLocalizedString("Failed to load logs: %@", comment: "Log viewer command failure"),
+                message.isEmpty ? "log show exited with status \(process.terminationStatus)" : message
+            )
+        }
+
+        return output.isEmpty
+            ? NSLocalizedString("No XSnooze notice logs found in the last 24 hours.", comment: "Log viewer empty state")
+            : output
+    }
+
     // MARK: UI state
 
     private func initStatusItem() {
-        // 始终先显示图标，以便用户可以访问菜单
         if let icon = NSImage(named: "bluesnooze") {
+            icon.size = NSSize(width: 18, height: 18)
             icon.isTemplate = true
             statusItem.button?.image = icon
         } else {
@@ -578,14 +910,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func setLaunchAtLoginState() {
         let state = LaunchAtLogin.isEnabled ? NSControl.StateValue.on : NSControl.StateValue.off
         launchAtLoginMenuItem.state = state
-        launchAtLoginButton?.state = state
+        launchAtLoginCheckmark?.isHidden = state != .on
     }
-    
+
     private func setToggleIconState() {
         let hideIcon = UserDefaults.standard.bool(forKey: "hideIcon")
         let state = hideIcon ? NSControl.StateValue.on : NSControl.StateValue.off
         toggleIconMenuItem.state = state
-        toggleIconButton?.state = state
+        toggleIconCheckmark?.isHidden = state != .on
     }
 
     private func setupStatusPopover() {
@@ -606,11 +938,63 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setToggleIconState()
         setLowBatteryMenuState()
         statusPopover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+        statusPopover.contentViewController?.view.window?.makeKey()
+        startPopoverEventMonitoring()
     }
 
     func popoverDidClose(_ notification: Notification) {
         statusPopoverClosedAt = Date()
+        stopPopoverEventMonitoring()
         scheduleHideIconIfNeeded()
+    }
+
+    private func closeStatusPopoverIfNeeded() {
+        guard statusPopover.isShown else {
+            return
+        }
+
+        statusPopover.performClose(nil)
+    }
+
+    private func startPopoverEventMonitoring() {
+        stopPopoverEventMonitoring()
+        popoverEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]) { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            if event.type == .keyDown, event.keyCode == 53 {
+                self.closeStatusPopoverIfNeeded()
+                return nil
+            }
+
+            if event.type == .leftMouseDown || event.type == .rightMouseDown || event.type == .otherMouseDown {
+                let popoverWindow = self.statusPopover.contentViewController?.view.window
+                if event.window !== popoverWindow {
+                    self.closeStatusPopoverIfNeeded()
+                }
+            }
+
+            return event
+        }
+        popoverGlobalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.closeStatusPopoverIfNeeded()
+            }
+        }
+    }
+
+    private func stopPopoverEventMonitoring() {
+        if let popoverEventMonitor {
+            NSEvent.removeMonitor(popoverEventMonitor)
+            self.popoverEventMonitor = nil
+        }
+
+        if let popoverGlobalEventMonitor {
+            NSEvent.removeMonitor(popoverGlobalEventMonitor)
+            self.popoverGlobalEventMonitor = nil
+        }
     }
 
     private func cancelHideIconTask() {
@@ -637,101 +1021,127 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func makeStatusPopoverView() -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 236))
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 260))
 
-        let launchButton = makeMenuCheckbox(
+        let launchRow = makeMenuToggleRow(
             title: NSLocalizedString("Launch at login", comment: "Launch at login menu item"),
             action: #selector(launchAtLoginClicked(_:))
         )
-        launchButton.frame = NSRect(x: 14, y: 200, width: 292, height: 22)
-        view.addSubview(launchButton)
+        launchRow.checkmark.frame.origin = NSPoint(x: 12, y: 106)
+        launchRow.titleLabel.frame = NSRect(x: 26, y: 104, width: 260, height: 18)
+        launchRow.control.frame = NSRect(x: 8, y: 102, width: 284, height: 22)
+        view.addSubview(launchRow.control)
+        view.addSubview(launchRow.checkmark)
+        view.addSubview(launchRow.titleLabel)
 
-        let toggleIconButton = makeMenuCheckbox(
+        let toggleIconRow = makeMenuToggleRow(
             title: NSLocalizedString("Hide menu bar icon", comment: "Hide menu bar icon menu item"),
             action: #selector(toggleIconClicked(_:))
         )
-        toggleIconButton.frame = NSRect(x: 14, y: 172, width: 292, height: 22)
-        view.addSubview(toggleIconButton)
+        toggleIconRow.checkmark.frame.origin = NSPoint(x: 12, y: 78)
+        toggleIconRow.titleLabel.frame = NSRect(x: 26, y: 76, width: 260, height: 18)
+        toggleIconRow.control.frame = NSRect(x: 8, y: 74, width: 284, height: 22)
+        view.addSubview(toggleIconRow.control)
+        view.addSubview(toggleIconRow.checkmark)
+        view.addSubview(toggleIconRow.titleLabel)
 
-        view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 158, width: 320, height: 1)))
-
-        let lowBatteryReminderButton = makeMenuCheckbox(
+        let lowBatteryReminderRow = makeMenuToggleRow(
             title: NSLocalizedString("Low Battery Reminder", comment: "Low battery reminder menu item"),
             action: #selector(lowBatteryReminderClicked(_:))
         )
-        lowBatteryReminderButton.frame = NSRect(x: 14, y: 130, width: 292, height: 22)
-        view.addSubview(lowBatteryReminderButton)
+        lowBatteryReminderRow.checkmark.frame.origin = NSPoint(x: 12, y: 232)
+        lowBatteryReminderRow.titleLabel.frame = NSRect(x: 26, y: 230, width: 260, height: 18)
+        lowBatteryReminderRow.control.frame = NSRect(x: 8, y: 228, width: 284, height: 22)
+        view.addSubview(lowBatteryReminderRow.control)
+        view.addSubview(lowBatteryReminderRow.checkmark)
+        view.addSubview(lowBatteryReminderRow.titleLabel)
 
         let thresholdLabel = makeLowBatteryLabel()
-        thresholdLabel.frame = NSRect(x: 42, y: 102, width: 160, height: 18)
+        thresholdLabel.frame = NSRect(x: 44, y: 198, width: 140, height: 18)
         view.addSubview(thresholdLabel)
 
         let thresholdStepper = makeLowBatteryStepper(
-            valueWidth: 42,
+            valueWidth: 44,
             decrementAction: #selector(lowBatteryThresholdDecrementClicked(_:)),
             incrementAction: #selector(lowBatteryThresholdIncrementClicked(_:))
         )
-        thresholdStepper.decrementButton.frame.origin = NSPoint(x: 204, y: 96)
-        thresholdStepper.valueLabel.frame.origin = NSPoint(x: 236, y: 99)
-        thresholdStepper.incrementButton.frame.origin = NSPoint(x: 284, y: 96)
+        thresholdStepper.decrementButton.frame.origin = NSPoint(x: 184, y: 195)
+        thresholdStepper.valueLabel.frame.origin = NSPoint(x: 212, y: 198)
+        thresholdStepper.incrementButton.frame.origin = NSPoint(x: 260, y: 195)
         view.addSubview(thresholdStepper.decrementButton)
         view.addSubview(thresholdStepper.valueLabel)
         view.addSubview(thresholdStepper.incrementButton)
 
-        let forceHibernateCheckbox = NSButton(
-            checkboxWithTitle: NSLocalizedString("Hibernate if no response", comment: "Low battery force hibernation checkbox"),
-            target: self,
+        let forceHibernateRow = makeMenuToggleRow(
+            title: NSLocalizedString("Hibernate if no response", comment: "Low battery force hibernation checkbox"),
             action: #selector(lowBatteryForceHibernateClicked(_:))
         )
-        forceHibernateCheckbox.font = .menuFont(ofSize: 13)
-        forceHibernateCheckbox.frame = NSRect(x: 40, y: 72, width: 266, height: 20)
-        view.addSubview(forceHibernateCheckbox)
+        forceHibernateRow.checkmark.frame.origin = NSPoint(x: 30, y: 174)
+        forceHibernateRow.titleLabel.frame = NSRect(x: 44, y: 172, width: 242, height: 18)
+        forceHibernateRow.control.frame = NSRect(x: 26, y: 170, width: 266, height: 22)
+        view.addSubview(forceHibernateRow.control)
+        view.addSubview(forceHibernateRow.checkmark)
+        view.addSubview(forceHibernateRow.titleLabel)
 
         let countdownLabel = makeLowBatteryLabel()
-        countdownLabel.frame = NSRect(x: 42, y: 46, width: 160, height: 18)
+        countdownLabel.frame = NSRect(x: 44, y: 142, width: 140, height: 18)
         view.addSubview(countdownLabel)
 
         let countdownStepper = makeLowBatteryStepper(
-            valueWidth: 50,
+            valueWidth: 44,
             decrementAction: #selector(lowBatteryCountdownDecrementClicked(_:)),
             incrementAction: #selector(lowBatteryCountdownIncrementClicked(_:))
         )
-        countdownStepper.decrementButton.frame.origin = NSPoint(x: 196, y: 40)
-        countdownStepper.valueLabel.frame.origin = NSPoint(x: 228, y: 43)
-        countdownStepper.incrementButton.frame.origin = NSPoint(x: 284, y: 40)
+        countdownStepper.decrementButton.frame.origin = NSPoint(x: 184, y: 139)
+        countdownStepper.valueLabel.frame.origin = NSPoint(x: 212, y: 142)
+        countdownStepper.incrementButton.frame.origin = NSPoint(x: 260, y: 139)
         view.addSubview(countdownStepper.decrementButton)
         view.addSubview(countdownStepper.valueLabel)
         view.addSubview(countdownStepper.incrementButton)
 
-        view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 32, width: 320, height: 1)))
+        view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 130, width: 300, height: 1)))
 
-        let quitButton = NSButton(
+        let logsRow = makeMenuCommandRow(
+            title: NSLocalizedString("View Logs", comment: "Open log viewer menu item"),
+            action: #selector(showLogsClicked(_:))
+        )
+        logsRow.titleLabel.frame = NSRect(x: 26, y: 48, width: 160, height: 18)
+        logsRow.control.frame = NSRect(x: 8, y: 46, width: 284, height: 22)
+        view.addSubview(logsRow.control)
+        view.addSubview(logsRow.titleLabel)
+
+        view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 38, width: 300, height: 1)))
+
+        let quitRow = makeMenuCommandRow(
             title: NSLocalizedString("Quit", comment: "Quit menu item"),
-            target: self,
             action: #selector(quitClicked(_:))
         )
-        quitButton.isBordered = false
-        quitButton.alignment = .left
-        quitButton.font = .menuFont(ofSize: 13)
-        quitButton.frame = NSRect(x: 18, y: 2, width: 140, height: 28)
-        view.addSubview(quitButton)
+        quitRow.titleLabel.frame = NSRect(x: 26, y: 12, width: 72, height: 18)
+        quitRow.control.frame = NSRect(x: 8, y: 10, width: 284, height: 22)
+        view.addSubview(quitRow.control)
+        view.addSubview(quitRow.titleLabel)
 
         let versionLabel = NSTextField(labelWithString: appVersionText())
         versionLabel.alignment = .right
         versionLabel.font = .menuFont(ofSize: 12)
         versionLabel.textColor = .secondaryLabelColor
-        versionLabel.frame = NSRect(x: 168, y: 7, width: 126, height: 18)
+        versionLabel.frame = NSRect(x: 198, y: 12, width: 76, height: 18)
         view.addSubview(versionLabel)
 
-        self.launchAtLoginButton = launchButton
-        self.toggleIconButton = toggleIconButton
-        self.lowBatteryReminderButton = lowBatteryReminderButton
+        self.launchAtLoginButton = launchRow.control
+        self.toggleIconButton = toggleIconRow.control
+        self.lowBatteryReminderButton = lowBatteryReminderRow.control
+        launchAtLoginCheckmark = launchRow.checkmark
+        toggleIconCheckmark = toggleIconRow.checkmark
+        lowBatteryReminderCheckmark = lowBatteryReminderRow.checkmark
+        lowBatteryForceHibernateCheckmark = forceHibernateRow.checkmark
+        lowBatteryForceHibernateTitleLabel = forceHibernateRow.titleLabel
         self.versionLabel = versionLabel
         lowBatteryThresholdLabel = thresholdLabel
         lowBatteryThresholdValueLabel = thresholdStepper.valueLabel
         lowBatteryThresholdDecrementButton = thresholdStepper.decrementButton
         lowBatteryThresholdIncrementButton = thresholdStepper.incrementButton
-        lowBatteryForceHibernateCheckbox = forceHibernateCheckbox
+        lowBatteryForceHibernateCheckbox = forceHibernateRow.control
         lowBatteryCountdownLabel = countdownLabel
         lowBatteryCountdownValueLabel = countdownStepper.valueLabel
         lowBatteryCountdownDecrementButton = countdownStepper.decrementButton
@@ -740,10 +1150,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         return view
     }
 
-    private func makeMenuCheckbox(title: String, action: Selector) -> NSButton {
-        let button = NSButton(checkboxWithTitle: title, target: self, action: action)
-        button.font = .menuFont(ofSize: 13)
-        return button
+    private func makeMenuToggleRow(title: String, action: Selector) -> (checkmark: NSTextField, titleLabel: NSTextField, control: HoverMenuRowControl) {
+        let checkmark = PassthroughTextField(labelWithString: "✓")
+        checkmark.alignment = .right
+        checkmark.font = .menuFont(ofSize: 13)
+        checkmark.textColor = .labelColor
+        checkmark.frame.size = NSSize(width: 14, height: 16)
+        checkmark.isHidden = true
+
+        let titleLabel = PassthroughTextField(labelWithString: title)
+        titleLabel.font = .menuFont(ofSize: 13)
+        titleLabel.textColor = .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+
+        let control = HoverMenuRowControl(checkmarkLabel: checkmark, titleLabel: titleLabel, target: self, action: action)
+        return (checkmark, titleLabel, control)
+    }
+
+    private func makeMenuCommandRow(title: String, action: Selector) -> (titleLabel: NSTextField, control: HoverMenuRowControl) {
+        let titleLabel = PassthroughTextField(labelWithString: title)
+        titleLabel.font = .menuFont(ofSize: 13)
+        titleLabel.textColor = .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+
+        let control = HoverMenuRowControl(checkmarkLabel: nil, titleLabel: titleLabel, target: self, action: action)
+        return (titleLabel, control)
     }
 
     private func makeSeparator(frame: NSRect) -> NSBox {
@@ -753,8 +1184,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.0"
-        return "v\(version)"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.3"
+        return version
     }
 
     private func makeLowBatteryLabel() -> NSTextField {
@@ -779,11 +1210,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func makeStepButton(title: String, action: Selector) -> NSButton {
-        let button = NSButton(title: title, target: self, action: action)
+        let button = HoverStepButton(title: title, target: self, action: action)
         button.isBordered = false
         button.font = .menuFont(ofSize: 15)
         button.alignment = .center
-        button.frame.size = NSSize(width: 28, height: 24)
+        button.frame.size = NSSize(width: 24, height: 24)
+        button.bezelStyle = .regularSquare
         return button
     }
 
@@ -815,13 +1247,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func setLowBatteryMenuState() {
         lowBatteryReminderMenuItem?.state = lowBatterySettings.isEnabled ? .on : .off
-        lowBatteryReminderButton?.state = lowBatterySettings.isEnabled ? .on : .off
+        lowBatteryReminderCheckmark?.isHidden = !lowBatterySettings.isEnabled
         lowBatteryThresholdLabel?.stringValue = NSLocalizedString("Battery alert threshold", comment: "Low battery threshold setting label")
         lowBatteryThresholdValueLabel?.stringValue = String(
             format: NSLocalizedString("%d%%", comment: "Low battery threshold value"),
             lowBatterySettings.thresholdPercentage
         )
-        lowBatteryForceHibernateCheckbox?.state = lowBatterySettings.forceHibernateOnTimeout ? .on : .off
+        lowBatteryForceHibernateCheckmark?.isHidden = !lowBatterySettings.forceHibernateOnTimeout
         lowBatteryCountdownLabel?.stringValue = NSLocalizedString("No response countdown", comment: "Low battery countdown setting label")
         lowBatteryCountdownValueLabel?.stringValue = String(
             format: NSLocalizedString("%ds", comment: "Low battery countdown value"),
@@ -840,6 +1272,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         lowBatteryForceHibernateCheckbox?.isEnabled = lowBatterySettings.isEnabled
         lowBatteryForceHibernateCheckbox?.alphaValue = lowBatterySettings.isEnabled ? 1.0 : disabledLowBatteryControlAlpha
+        lowBatteryForceHibernateCheckmark?.alphaValue = lowBatterySettings.isEnabled ? 1.0 : disabledLowBatteryControlAlpha
+        lowBatteryForceHibernateTitleLabel?.isEnabled = lowBatterySettings.isEnabled
+        lowBatteryForceHibernateTitleLabel?.alphaValue = 1.0
+        lowBatteryForceHibernateTitleLabel?.textColor = lowBatterySettings.isEnabled ? .labelColor : .disabledControlTextColor
 
         applyLowBatteryState(
             isEnabled: lowBatterySettings.canEditCountdown,

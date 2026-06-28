@@ -15,3 +15,11 @@
 "%ds" = "%d秒";
 "Hibernate if no response" = "无人响应时强制休眠";
 "Countdown %ds" = "倒计时 %d 秒";
+"View Logs" = "查看日志";
+"XSnooze Logs" = "XSnooze 日志";
+"Refresh" = "刷新";
+"Copy" = "复制";
+"Close" = "关闭";
+"Loading logs..." = "正在加载日志...";
+"No XSnooze notice logs found in the last 24 hours." = "最近 24 小时没有找到 XSnooze notice 日志。";
+"Failed to load logs: %@" = "读取日志失败：%@";

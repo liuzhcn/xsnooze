@@ -9,5 +9,17 @@
 "Quit" = "Quit";
 "Low Battery Reminder" = "Low Battery Reminder";
 "Remind below %d%%" = "Remind below %d%%";
+"Battery alert threshold" = "Battery alert threshold:";
+"No response countdown" = "No response countdown:";
+"%d%%" = "%d%%";
+"%ds" = "%ds";
 "Hibernate if no response" = "Hibernate if no response";
 "Countdown %ds" = "Countdown %ds";
+"View Logs" = "View Logs";
+"XSnooze Logs" = "XSnooze Logs";
+"Refresh" = "Refresh";
+"Copy" = "Copy";
+"Close" = "Close";
+"Loading logs..." = "Loading logs...";
+"No XSnooze notice logs found in the last 24 hours." = "No XSnooze notice logs found in the last 24 hours.";
+"Failed to load logs: %@" = "Failed to load logs: %@";

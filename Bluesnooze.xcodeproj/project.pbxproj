@@ -20,6 +20,7 @@
 		5A15000F2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper in Embed Privileged Helper */ = {isa = PBXBuildFile; fileRef = 5A15000E2C25B00100B1784C /* com.liuzhcn.XSnooze.Helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		5A1500232C25B00100B1784C /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5A1500202C25B00100B1784C /* Localizable.strings */; };
 		5A1500252C25B00100B1784C /* WirelessSleepPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500242C25B00100B1784C /* WirelessSleepPolicy.swift */; };
+		5A1500272C25B00200B1784C /* LogViewerPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500262C25B00200B1784C /* LogViewerPolicy.swift */; };
 		4FDC9C13243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM in CopyFiles */ = {isa = PBXBuildFile; fileRef = 4FDC9C12243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM */; };
 		4FDC9C14243DCC6B00FB0C4E /* LaunchAtLogin.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */; };
 		4FDC9C15243DCC6B00FB0C4E /* LaunchAtLogin.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -93,6 +94,7 @@
 		5A1500212C25B00100B1784C /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		5A1500222C25B00100B1784C /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		5A1500242C25B00100B1784C /* WirelessSleepPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WirelessSleepPolicy.swift; sourceTree = "<group>"; };
+		5A1500262C25B00200B1784C /* LogViewerPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogViewerPolicy.swift; sourceTree = "<group>"; };
 		4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = LaunchAtLogin.framework; path = Carthage/Build/Mac/LaunchAtLogin.framework; sourceTree = "<group>"; };
 		4FDC9C12243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM */ = {isa = PBXFileReference; lastKnownFileType = wrapper.dsym; name = LaunchAtLogin.framework.dSYM; path = Carthage/Build/Mac/LaunchAtLogin.framework.dSYM; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -144,6 +146,7 @@
 				5A1500022C25B00100B1784C /* PowerSourceMonitor.swift */,
 				5A1500042C25B00100B1784C /* PrivilegedHelperClient.swift */,
 				5A1500242C25B00100B1784C /* WirelessSleepPolicy.swift */,
+				5A1500262C25B00200B1784C /* LogViewerPolicy.swift */,
 				4F229ABF243CC29600B1784C /* Assets.xcassets */,
 				4F229AC1243CC29600B1784C /* MainMenu.xib */,
 				4F229AC4243CC29600B1784C /* Info.plist */,
@@ -329,6 +332,7 @@
 				5A1500052C25B00100B1784C /* PrivilegedHelperClient.swift in Sources */,
 				5A1500072C25B00100B1784C /* PrivilegedHelperProtocol.swift in Sources */,
 				5A1500252C25B00100B1784C /* WirelessSleepPolicy.swift in Sources */,
+				5A1500272C25B00200B1784C /* LogViewerPolicy.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -521,7 +525,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.6.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
@@ -551,7 +555,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.6.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
@@ -571,7 +575,7 @@
 				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.6.3;
 				OTHER_LDFLAGS = (
 					"-sectcreate",
 					__TEXT,
@@ -597,7 +601,7 @@
 				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.6.0;
+				MARKETING_VERSION = 1.6.3;
 				OTHER_LDFLAGS = (
 					"-sectcreate",
 					__TEXT,
