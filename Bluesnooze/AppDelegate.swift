@@ -9,6 +9,7 @@
 import Cocoa
 import CoreWLAN
 import IOBluetooth
+import IOKit.pwr_mgt
 import LaunchAtLogin
 import OSLog
 
@@ -17,6 +18,13 @@ private enum AppLog {
     static let bluetooth = Logger(subsystem: "com.liuzhcn.XSnooze", category: "bluetooth")
     static let wifi = Logger(subsystem: "com.liuzhcn.XSnooze", category: "wifi")
     static let hibernate = Logger(subsystem: "com.liuzhcn.XSnooze", category: "hibernate")
+}
+
+private enum IOKitPowerMessage {
+    // Swift cannot import these IOMessage.h macros because they expand through helper macros.
+    static let canSystemSleep: UInt32 = 0xe0000270
+    static let systemWillSleep: UInt32 = 0xe0000280
+    static let systemHasPoweredOn: UInt32 = 0xe0000300
 }
 
 private final class PassthroughTextField: NSTextField {
@@ -205,11 +213,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var popoverGlobalEventMonitor: Any?
     private let bluetoothWasOnBeforeSleepKey = "bluetoothWasOnBeforeSleep"
     private let wifiWasOnBeforeSleepKey = "wifiWasOnBeforeSleep"
-    private var cachedBluetoothWasOn = false
-    private var cachedWiFiWasOn = false
-    private var wirelessStateRefreshTimer: Timer?
-    private var bluetoothVerificationID = 0
-    private var wifiVerificationID = 0
+    private var cachedBluetoothWasOn: Bool?
+    private var cachedWiFiWasOn: Bool?
+    private var wirelessStateMonitor: WirelessStateMonitor?
+    private var powerNotificationPort: IONotificationPortRef?
+    private var powerNotifier: io_object_t = 0
+    private var rootPowerPort: io_connect_t = 0
+    private var powerEventRouter = PowerEventRouter(duplicateWindow: 5.0, iokitNotificationsAvailable: false)
+    private lazy var bluetoothPowerController = BluetoothPowerController(
+        preferencesAvailable: { IOBluetoothPreferencesAvailable() != 0 },
+        getPowerState: { IOBluetoothPreferenceGetControllerPowerState() },
+        setPowerState: { IOBluetoothPreferenceSetControllerPowerState($0) },
+        wait: { Thread.sleep(forTimeInterval: $0) }
+    )
     private let powerSourceMonitor = PowerSourceMonitor()
     private let privilegedHelperClient = PrivilegedHelperClient()
     private var lowBatteryAlert: NSAlert?
@@ -251,7 +267,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setToggleIconState()
         setupNotificationHandlers()
         privilegedHelperClient.restoreHibernationModeIfNeeded()
-        setupWirelessStateRefresh()
+        setupWirelessStateMonitor()
         setupLowBatteryMonitor()
     }
     
@@ -406,82 +422,185 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         ].forEach { notification, sel in
             NSWorkspace.shared.notificationCenter.addObserver(self, selector: sel, name: notification, object: nil)
         }
+        setupIOKitPowerNotifications()
     }
 
     @objc func onPowerDown(note: NSNotification) {
-        AppLog.power.notice("Sleep notification received.")
-        let decision = WirelessSleepPolicy.sleepActions(
-            cachedBluetoothWasOn: cachedBluetoothWasOn,
-            cachedWiFiWasOn: cachedWiFiWasOn,
-            readCurrentBluetoothState: isBluetoothOn,
-            readCurrentWiFiState: isWiFiOn
-        )
-        AppLog.power.notice("Stored cached pre-sleep wireless state. bluetoothWasOn=\(decision.bluetoothWasOn, privacy: .public), wifiWasOn=\(decision.wifiWasOn, privacy: .public)")
-        UserDefaults.standard.set(decision.bluetoothWasOn, forKey: bluetoothWasOnBeforeSleepKey)
-        UserDefaults.standard.set(decision.wifiWasOn, forKey: wifiWasOnBeforeSleepKey)
-
-        if decision.shouldTurnBluetoothOff {
-            setBluetooth(powerOn: false, verify: false)
-            verifyBluetoothPowerStateAsync(requestedPowerOn: false, reason: "sleep")
-        } else {
-            AppLog.bluetooth.notice("Skipping Bluetooth off request because Bluetooth was not on before sleep.")
-        }
-
-        if decision.shouldTurnWiFiOff {
-            setWiFi(powerOn: false, verify: false)
-            verifyWiFiPowerStateAsync(requestedPowerOn: false, reason: "sleep")
-        } else {
-            AppLog.wifi.notice("Skipping Wi-Fi off request because Wi-Fi was not on before sleep.")
-        }
+        let decision = powerEventRouter.sleepDecision(source: .nsWorkspace)
+        handleSleepDecision(decision)
     }
 
     @objc func onPowerUp(note: NSNotification) {
-        AppLog.power.notice("Wake notification received.")
-        let bluetoothWasOn = UserDefaults.standard.bool(forKey: bluetoothWasOnBeforeSleepKey)
-        let wifiWasOn = UserDefaults.standard.bool(forKey: wifiWasOnBeforeSleepKey)
-        AppLog.power.notice("Loaded pre-sleep wireless state. bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
+        let decision = powerEventRouter.wakeDecision(source: .nsWorkspace)
+        handleWakeDecision(decision)
+    }
+
+    private func setupIOKitPowerNotifications() {
+        guard powerNotificationPort == nil else {
+            return
+        }
+
+        rootPowerPort = IORegisterForSystemPower(
+            Unmanaged.passUnretained(self).toOpaque(),
+            &powerNotificationPort,
+            { refCon, _, messageType, messageArgument in
+                guard let refCon else {
+                    return
+                }
+
+                let delegate = Unmanaged<AppDelegate>.fromOpaque(refCon).takeUnretainedValue()
+                delegate.handleIOKitPowerMessage(type: messageType, argument: messageArgument)
+            },
+            &powerNotifier
+        )
+
+        guard rootPowerPort != 0,
+              let powerNotificationPort,
+              let runLoopSource = IONotificationPortGetRunLoopSource(powerNotificationPort)?.takeUnretainedValue() else {
+            powerEventRouter.setIOKitNotificationsAvailable(false)
+            AppLog.power.error("Failed to register IOKit power notifications.")
+            return
+        }
+
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        powerEventRouter.setIOKitNotificationsAvailable(true)
+        AppLog.power.notice("Registered IOKit power notifications.")
+    }
+
+    private func handleIOKitPowerMessage(type: UInt32, argument: UnsafeMutableRawPointer?) {
+        switch type {
+        case IOKitPowerMessage.canSystemSleep:
+            AppLog.power.notice("Can system sleep notification received from IOKit.")
+            allowIOKitPowerChange(argument: argument)
+        case IOKitPowerMessage.systemWillSleep:
+            let decision = powerEventRouter.sleepDecision(source: .iokit)
+            handleSleepDecision(decision)
+            allowIOKitPowerChange(argument: argument)
+        case IOKitPowerMessage.systemHasPoweredOn:
+            let decision = powerEventRouter.wakeDecision(source: .iokit)
+            handleWakeDecision(decision)
+        default:
+            break
+        }
+    }
+
+    private func allowIOKitPowerChange(argument: UnsafeMutableRawPointer?) {
+        guard rootPowerPort != 0 else {
+            return
+        }
+
+        let result = IOAllowPowerChange(rootPowerPort, Int(bitPattern: argument))
+        if result != kIOReturnSuccess {
+            AppLog.power.warning("Failed to allow IOKit power change. result=\(result, privacy: .public)")
+        }
+    }
+
+    private func handleSleepDecision(_ decision: SleepPowerEventDecision) {
+        if decision.isDuplicate {
+            AppLog.power.notice("Skipping duplicate sleep notification. source=\(decision.handlerSource, privacy: .public)")
+            return
+        }
+
+        if decision.isDiagnosticOnly {
+            AppLog.power.notice("NSWorkspace sleep notification received for diagnostics only. source=\(decision.handlerSource, privacy: .public), iokitNotificationsAvailable=\(decision.iokitNotificationsAvailable, privacy: .public), iokitSleepObserved=\(decision.iokitSleepObserved, privacy: .public), skippedWirelessHandling=true")
+            return
+        }
+
+        AppLog.power.notice("Sleep notification received. source=\(decision.handlerSource, privacy: .public), iokitNotificationsAvailable=\(decision.iokitNotificationsAvailable, privacy: .public), iokitSleepObserved=\(decision.iokitSleepObserved, privacy: .public), skippedWirelessHandling=false")
+        handleWirelessSleep(source: decision.handlerSource)
+    }
+
+    private func handleWirelessSleep(source: String) {
+        let decision = WirelessSleepPolicy.sleepActions(
+            cachedBluetoothWasOn: cachedBluetoothWasOn,
+            cachedWiFiWasOn: cachedWiFiWasOn
+        )
+        storePreSleepWirelessState(decision)
+
+        if decision.shouldTurnBluetoothOff {
+            setBluetoothPower(false, reason: "sleep", source: source)
+        } else {
+            logSkippedBluetoothSleepAction(state: decision.bluetoothWasOn)
+        }
+
+        if decision.shouldTurnWiFiOff {
+            setWiFi(powerOn: false, verify: true)
+        } else {
+            logSkippedWiFiSleepAction(state: decision.wifiWasOn)
+        }
+    }
+
+    private func handleWakeDecision(_ decision: WakePowerEventDecision) {
+        if decision.isDuplicate {
+            AppLog.power.notice("Skipping duplicate wake notification. source=\(decision.handlerSource, privacy: .public)")
+            return
+        }
+
+        if decision.isDiagnosticOnly {
+            AppLog.power.notice("Wake notification received for diagnostics only. source=\(decision.handlerSource, privacy: .public), skippedWirelessRestore=true")
+            return
+        }
+
+        AppLog.power.notice("Wake notification received. source=\(decision.handlerSource, privacy: .public), skippedWirelessRestore=false")
+        handleWirelessWake()
+    }
+
+    private func handleWirelessWake() {
+        let bluetoothWasOn = storedBool(forKey: bluetoothWasOnBeforeSleepKey)
+        let wifiWasOn = storedBool(forKey: wifiWasOnBeforeSleepKey)
+        AppLog.power.notice("Loaded pre-sleep wireless state. bluetoothWasOn=\(self.stateDescription(bluetoothWasOn), privacy: .public), wifiWasOn=\(self.stateDescription(wifiWasOn), privacy: .public)")
 
         privilegedHelperClient.restoreHibernationModeIfNeeded()
 
-        if bluetoothWasOn {
-            setBluetooth(powerOn: true, verify: false)
-            verifyBluetoothPowerStateAsync(requestedPowerOn: true, reason: "wake")
-        } else {
-            AppLog.bluetooth.notice("Skipping Bluetooth on request because Bluetooth was not on before sleep.")
+        switch bluetoothWasOn {
+        case true:
+            if cachedBluetoothWasOn == true {
+                AppLog.bluetooth.notice("Skipping Bluetooth on request because Bluetooth is already on according to CoreBluetooth cache.")
+            } else {
+                setBluetoothPower(true, reason: "wake", source: "NSWorkspace")
+            }
+        case false:
+            AppLog.bluetooth.notice("Skipping Bluetooth on request because Bluetooth was off before sleep.")
+        case nil:
+            AppLog.bluetooth.notice("Skipping Bluetooth on request because pre-sleep Bluetooth state is unknown.")
         }
 
-        if wifiWasOn {
+        switch wifiWasOn {
+        case true:
             setWiFi(powerOn: true, verify: false)
-            verifyWiFiPowerStateAsync(requestedPowerOn: true, reason: "wake")
-        } else {
-            AppLog.wifi.notice("Skipping Wi-Fi on request because Wi-Fi was not on before sleep.")
+        case false:
+            AppLog.wifi.notice("Skipping Wi-Fi on request because Wi-Fi was off before sleep.")
+        case nil:
+            AppLog.wifi.notice("Skipping Wi-Fi on request because pre-sleep Wi-Fi state is unknown.")
         }
 
         clearStoredPowerStates()
-        refreshWirelessStateCache(reason: "wake")
     }
 
-    private func setBluetooth(powerOn: Bool, verify: Bool = true) {
-        AppLog.bluetooth.notice("Requesting Bluetooth power state. powerOn=\(powerOn, privacy: .public)")
-        IOBluetoothPreferenceSetControllerPowerState(powerOn ? 1 : 0)
-        cachedBluetoothWasOn = powerOn
-        if verify, hasBluetoothPermission() {
-            let observedPowerOn = isBluetoothOn()
-            AppLog.bluetooth.notice("Bluetooth power request completed. requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
-        } else if verify {
-            AppLog.bluetooth.warning("Bluetooth power request completed, but observed state cannot be read because Bluetooth permission is unavailable.")
-        } else {
-            AppLog.bluetooth.notice("Bluetooth power request completed without immediate verification. requestedPowerOn=\(powerOn, privacy: .public)")
-        }
-    }
+    private func setBluetoothPower(_ powerOn: Bool, reason: String, source: String) {
+        AppLog.bluetooth.notice("Requesting Bluetooth power state. reason=\(reason, privacy: .public), source=\(source, privacy: .public), powerOn=\(powerOn, privacy: .public)")
+        let forceSetter = reason == "sleep"
+        let minimumWaitAfterSetter = forceSetter ? 1.0 : 0
+        let result = bluetoothPowerController.setPower(
+            powerOn,
+            timeout: 3.0,
+            pollInterval: 0.1,
+            forceSetter: forceSetter,
+            minimumWaitAfterSetter: minimumWaitAfterSetter
+        )
 
-    private func isBluetoothOn() -> Bool {
-        guard hasBluetoothPermission(),
-              let bluetoothController = IOBluetoothHostController.default() else {
-            return false
+        switch result.status {
+        case .unavailable:
+            AppLog.bluetooth.error("Bluetooth power request failed because IOBluetooth preferences are unavailable. reason=\(reason, privacy: .public), requestedPowerOn=\(powerOn, privacy: .public)")
+        case .alreadyInState:
+            cachedBluetoothWasOn = powerOn
+            AppLog.bluetooth.notice("Bluetooth power request skipped because state already matched. reason=\(reason, privacy: .public), requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(self.stateDescription(result.observedPowerOn), privacy: .public)")
+        case .changed:
+            cachedBluetoothWasOn = powerOn
+            AppLog.bluetooth.notice("Bluetooth power request completed. reason=\(reason, privacy: .public), requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(self.stateDescription(result.observedPowerOn), privacy: .public), elapsedSeconds=\(result.elapsed, privacy: .public)")
+        case .timedOut:
+            AppLog.bluetooth.warning("Bluetooth power request timed out. reason=\(reason, privacy: .public), requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(self.stateDescription(result.observedPowerOn), privacy: .public), timeoutSeconds=3.0")
         }
-
-        return bluetoothController.powerState == kBluetoothHCIPowerStateON
     }
 
     private func setWiFi(powerOn: Bool, verify: Bool = true) {
@@ -505,102 +624,100 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
-    private func isWiFiOn() -> Bool {
-        guard let interface = CWWiFiClient.shared().interface() else {
-            return false
-        }
-
-        return interface.powerOn()
-    }
-
-    private func verifyBluetoothPowerStateAsync(requestedPowerOn: Bool, reason: String, timeout: TimeInterval = 2.0) {
-        bluetoothVerificationID += 1
-        let verificationID = bluetoothVerificationID
-        var completed = false
-
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let observedPowerOn = self?.isBluetoothOn() ?? false
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.bluetoothVerificationID == verificationID, !completed else {
-                    return
-                }
-
-                completed = true
-                self.cachedBluetoothWasOn = observedPowerOn
-                AppLog.bluetooth.notice("Bluetooth power verification completed. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-            guard let self, self.bluetoothVerificationID == verificationID, !completed else {
-                return
-            }
-
-            completed = true
-            AppLog.bluetooth.warning("Bluetooth power verification timed out. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), timeoutSeconds=\(timeout, privacy: .public)")
-        }
-    }
-
-    private func verifyWiFiPowerStateAsync(requestedPowerOn: Bool, reason: String, timeout: TimeInterval = 2.0) {
-        wifiVerificationID += 1
-        let verificationID = wifiVerificationID
-        var completed = false
-
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let observedPowerOn = self?.isWiFiOn() ?? false
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.wifiVerificationID == verificationID, !completed else {
-                    return
-                }
-
-                completed = true
-                self.cachedWiFiWasOn = observedPowerOn
-                AppLog.wifi.notice("Wi-Fi power verification completed. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), observedPowerOn=\(observedPowerOn, privacy: .public)")
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-            guard let self, self.wifiVerificationID == verificationID, !completed else {
-                return
-            }
-
-            completed = true
-            AppLog.wifi.warning("Wi-Fi power verification timed out. reason=\(reason, privacy: .public), requestedPowerOn=\(requestedPowerOn, privacy: .public), timeoutSeconds=\(timeout, privacy: .public)")
-        }
-    }
-
-    private func setupWirelessStateRefresh() {
-        refreshWirelessStateCache(reason: "launch")
-        wirelessStateRefreshTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
-            self?.refreshWirelessStateCache(reason: "timer")
-        }
-    }
-
-    private func refreshWirelessStateCache(reason: String) {
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self else {
-                return
-            }
-
-            let bluetoothWasOn = self.isBluetoothOn()
-            let wifiWasOn = self.isWiFiOn()
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    return
-                }
-
-                self.cachedBluetoothWasOn = bluetoothWasOn
-                self.cachedWiFiWasOn = wifiWasOn
-                AppLog.power.info("Refreshed wireless state cache. reason=\(reason, privacy: .public), bluetoothWasOn=\(bluetoothWasOn, privacy: .public), wifiWasOn=\(wifiWasOn, privacy: .public)")
-            }
-        }
-    }
-
     private func clearStoredPowerStates() {
         UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
         UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
         AppLog.power.notice("Cleared stored pre-sleep wireless state.")
+    }
+
+    private func setupWirelessStateMonitor() {
+        cachedBluetoothWasOn = WirelessSleepPolicy.initialBluetoothCacheState(preferencePowerOn: nil)
+        AppLog.bluetooth.notice("Initial Bluetooth cache is unknown until CoreBluetooth reports a powered state.")
+
+        let monitor = WirelessStateMonitor()
+        monitor.onBluetoothPowerStateChange = { [weak self] powerOn, source in
+            DispatchQueue.main.async {
+                self?.handleBluetoothPowerStateChange(powerOn, source: source)
+            }
+        }
+        monitor.onWiFiPowerStateChange = { [weak self] powerOn, source in
+            DispatchQueue.main.async {
+                self?.handleWiFiPowerStateChange(powerOn, source: source)
+            }
+        }
+        monitor.onWiFiMonitoringError = { errorMessage in
+            AppLog.wifi.error("Failed to monitor Wi-Fi power changes. error=\(errorMessage, privacy: .public)")
+        }
+        wirelessStateMonitor = monitor
+        monitor.start()
+    }
+
+    private func handleBluetoothPowerStateChange(_ powerOn: Bool?, source: String) {
+        guard let powerOn else {
+            AppLog.bluetooth.warning("Bluetooth power state update was unknown; keeping previous cache. source=\(source, privacy: .public), cachedPowerOn=\(self.stateDescription(self.cachedBluetoothWasOn), privacy: .public)")
+            return
+        }
+
+        cachedBluetoothWasOn = powerOn
+        AppLog.bluetooth.notice("Bluetooth power state cache updated. source=\(source, privacy: .public), powerOn=\(powerOn, privacy: .public)")
+    }
+
+    private func handleWiFiPowerStateChange(_ powerOn: Bool?, source: String) {
+        guard let powerOn else {
+            AppLog.wifi.warning("Wi-Fi power state update was unknown; keeping previous cache. source=\(source, privacy: .public), cachedPowerOn=\(self.stateDescription(self.cachedWiFiWasOn), privacy: .public)")
+            return
+        }
+
+        cachedWiFiWasOn = powerOn
+        AppLog.wifi.notice("Wi-Fi power state cache updated. source=\(source, privacy: .public), powerOn=\(powerOn, privacy: .public)")
+    }
+
+    private func storePreSleepWirelessState(_ decision: WirelessSleepDecision) {
+        if let bluetoothWasOn = decision.bluetoothWasOn {
+            UserDefaults.standard.set(bluetoothWasOn, forKey: bluetoothWasOnBeforeSleepKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
+        }
+
+        if let wifiWasOn = decision.wifiWasOn {
+            UserDefaults.standard.set(wifiWasOn, forKey: wifiWasOnBeforeSleepKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
+        }
+
+        AppLog.power.notice("Stored cached pre-sleep wireless state. bluetoothWasOn=\(self.stateDescription(decision.bluetoothWasOn), privacy: .public), wifiWasOn=\(self.stateDescription(decision.wifiWasOn), privacy: .public)")
+    }
+
+    private func storedBool(forKey key: String) -> Bool? {
+        guard UserDefaults.standard.object(forKey: key) != nil else {
+            return nil
+        }
+
+        return UserDefaults.standard.bool(forKey: key)
+    }
+
+    private func logSkippedBluetoothSleepAction(state: Bool?) {
+        if state == nil {
+            AppLog.bluetooth.notice("Skipping Bluetooth off request because pre-sleep Bluetooth state is unknown.")
+        } else {
+            AppLog.bluetooth.notice("Skipping Bluetooth off request because Bluetooth was off before sleep.")
+        }
+    }
+
+    private func logSkippedWiFiSleepAction(state: Bool?) {
+        if state == nil {
+            AppLog.wifi.notice("Skipping Wi-Fi off request because pre-sleep Wi-Fi state is unknown.")
+        } else {
+            AppLog.wifi.notice("Skipping Wi-Fi off request because Wi-Fi was off before sleep.")
+        }
+    }
+
+    private func stateDescription(_ value: Bool?) -> String {
+        guard let value else {
+            return "unknown"
+        }
+
+        return value ? "true" : "false"
     }
 
     // MARK: Low battery hibernation
@@ -1184,7 +1301,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.6.3"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.0"
         return version
     }
 
@@ -1311,18 +1428,4 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         incrementButton?.alphaValue = incrementButton?.isEnabled == true ? 1.0 : disabledLowBatteryControlAlpha
     }
     
-    // MARK: Bluetooth permission handling
-    
-    private func hasBluetoothPermission() -> Bool {
-        // 检查蓝牙权限状态
-        if #available(macOS 10.15, *) {
-            // 在 macOS 10.15+ 上，我们需要检查蓝牙权限
-            // 如果之前已经授权过，就不会再次弹出权限请求
-            let bluetoothManager = IOBluetoothHostController.default()
-            return bluetoothManager != nil
-        } else {
-            // 在较旧的 macOS 版本上，通常不需要特殊权限
-            return true
-        }
-    }
 }
