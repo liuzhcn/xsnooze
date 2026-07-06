@@ -52,6 +52,7 @@ struct PowerEventRouter {
     private var deduplicator: PowerEventDeduplicator
     private(set) var iokitNotificationsAvailable: Bool
     private(set) var iokitSleepObserved = false
+    private var wirelessSleepHandled = false
 
     init(duplicateWindow: TimeInterval, iokitNotificationsAvailable: Bool) {
         self.deduplicator = PowerEventDeduplicator(duplicateWindow: duplicateWindow)
@@ -66,6 +67,17 @@ struct PowerEventRouter {
         switch source {
         case .iokit:
             iokitSleepObserved = true
+            guard !wirelessSleepHandled else {
+                return SleepPowerEventDecision(
+                    shouldHandleWirelessSleep: false,
+                    isDiagnosticOnly: false,
+                    isDuplicate: true,
+                    iokitNotificationsAvailable: iokitNotificationsAvailable,
+                    iokitSleepObserved: iokitSleepObserved,
+                    handlerSource: source.rawValue
+                )
+            }
+
             guard deduplicator.shouldHandle(.sleep, at: date) else {
                 return SleepPowerEventDecision(
                     shouldHandleWirelessSleep: false,
@@ -77,6 +89,7 @@ struct PowerEventRouter {
                 )
             }
 
+            wirelessSleepHandled = true
             return SleepPowerEventDecision(
                 shouldHandleWirelessSleep: true,
                 isDiagnosticOnly: false,
@@ -109,6 +122,7 @@ struct PowerEventRouter {
                 )
             }
 
+            wirelessSleepHandled = true
             return SleepPowerEventDecision(
                 shouldHandleWirelessSleep: true,
                 isDiagnosticOnly: false,
@@ -142,6 +156,7 @@ struct PowerEventRouter {
                 )
             }
 
+            wirelessSleepHandled = false
             return WakePowerEventDecision(
                 shouldRestoreWireless: true,
                 isDiagnosticOnly: false,

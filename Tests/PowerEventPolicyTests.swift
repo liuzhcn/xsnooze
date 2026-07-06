@@ -28,6 +28,7 @@ struct PowerEventPolicyTests {
         workspaceSleepFallsBackWhenIOKitIsUnavailable()
         iokitWakeOnlyLogsAndWorkspaceWakeRestores()
         wakeResetsIOKitSleepObservationForNextCycle()
+        iokitMaintenanceSleepBeforeWorkspaceWakeDoesNotHandleWirelessAgain()
     }
 
     static func suppressesDuplicateSleepNotificationsInsideWindow() {
@@ -121,5 +122,29 @@ struct PowerEventPolicyTests {
 
         assertTrue(nextWorkspaceSleep.isDiagnosticOnly, "Workspace sleep should still be diagnostic-only when IOKit is available")
         assertFalse(nextWorkspaceSleep.iokitSleepObserved, "Wake should reset IOKit sleep observation before the next cycle")
+    }
+
+    static func iokitMaintenanceSleepBeforeWorkspaceWakeDoesNotHandleWirelessAgain() {
+        var router = PowerEventRouter(duplicateWindow: 5, iokitNotificationsAvailable: true)
+        let now = Date(timeIntervalSinceReferenceDate: 8_000)
+
+        let firstSleep = router.sleepDecision(source: .iokit, at: now)
+        assertTrue(firstSleep.shouldHandleWirelessSleep, "First IOKit sleep should handle wireless state")
+
+        let iokitWake = router.wakeDecision(source: .iokit, at: now.addingTimeInterval(100))
+        assertTrue(iokitWake.isDiagnosticOnly, "IOKit wake should remain diagnostic-only")
+
+        let maintenanceSleep = router.sleepDecision(source: .iokit, at: now.addingTimeInterval(101))
+        assertFalse(
+            maintenanceSleep.shouldHandleWirelessSleep,
+            "Maintenance sleep before NSWorkspace wake should not overwrite pre-sleep wireless state"
+        )
+        assertTrue(maintenanceSleep.isDuplicate, "Maintenance sleep should be treated as part of the active sleep cycle")
+
+        let workspaceWake = router.wakeDecision(source: .nsWorkspace, at: now.addingTimeInterval(130))
+        assertTrue(workspaceWake.shouldRestoreWireless, "Workspace wake should end the active sleep cycle")
+
+        let nextSleep = router.sleepDecision(source: .iokit, at: now.addingTimeInterval(140))
+        assertTrue(nextSleep.shouldHandleWirelessSleep, "Next real sleep after workspace wake should handle wireless state")
     }
 }
