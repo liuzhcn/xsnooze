@@ -130,9 +130,11 @@ struct PowerEventPolicyTests {
 
         let firstSleep = router.sleepDecision(source: .iokit, at: now)
         assertTrue(firstSleep.shouldHandleWirelessSleep, "First IOKit sleep should handle wireless state")
+        assertTrue(router.isSleepCycleActive, "Sleep cycle should be active after IOKit sleep")
 
         let iokitWake = router.wakeDecision(source: .iokit, at: now.addingTimeInterval(100))
         assertTrue(iokitWake.isDiagnosticOnly, "IOKit wake should remain diagnostic-only")
+        assertTrue(router.isSleepCycleActive, "IOKit DarkWake should not end the sleep cycle")
 
         let maintenanceSleep = router.sleepDecision(source: .iokit, at: now.addingTimeInterval(101))
         assertFalse(
@@ -143,6 +145,7 @@ struct PowerEventPolicyTests {
 
         let workspaceWake = router.wakeDecision(source: .nsWorkspace, at: now.addingTimeInterval(130))
         assertTrue(workspaceWake.shouldRestoreWireless, "Workspace wake should end the active sleep cycle")
+        assertFalse(router.isSleepCycleActive, "Workspace wake should end the sleep cycle")
 
         let nextSleep = router.sleepDecision(source: .iokit, at: now.addingTimeInterval(140))
         assertTrue(nextSleep.shouldHandleWirelessSleep, "Next real sleep after workspace wake should handle wireless state")

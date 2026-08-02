@@ -53,6 +53,7 @@ struct PowerEventRouter {
     private(set) var iokitNotificationsAvailable: Bool
     private(set) var iokitSleepObserved = false
     private var wirelessSleepHandled = false
+    var isSleepCycleActive: Bool { wirelessSleepHandled }
 
     init(duplicateWindow: TimeInterval, iokitNotificationsAvailable: Bool) {
         self.deduplicator = PowerEventDeduplicator(duplicateWindow: duplicateWindow)

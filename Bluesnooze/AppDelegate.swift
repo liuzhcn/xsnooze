@@ -660,6 +660,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         cachedBluetoothWasOn = powerOn
         AppLog.bluetooth.notice("Bluetooth power state cache updated. source=\(source, privacy: .public), powerOn=\(powerOn, privacy: .public)")
+
+        if powerOn, powerEventRouter.isSleepCycleActive {
+            setBluetoothPower(false, reason: "sleep-cycle", source: source)
+        }
     }
 
     private func handleWiFiPowerStateChange(_ powerOn: Bool?, source: String) {
@@ -1301,7 +1305,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.3"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.4"
         return version
     }
 
