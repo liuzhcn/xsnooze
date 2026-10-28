@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5A1500312C25B00700B1784C /* LowBatteryWarningSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500302C25B00700B1784C /* LowBatteryWarningSession.swift */; };
 		5A15002F2C25B00600B1784C /* LowBatteryCountdownTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A15002E2C25B00600B1784C /* LowBatteryCountdownTimer.swift */; };
 		4F229ABE243CC29500B1784C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F229ABD243CC29500B1784C /* AppDelegate.swift */; };
 		4F229AC0243CC29600B1784C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F229ABF243CC29600B1784C /* Assets.xcassets */; };
@@ -76,6 +77,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5A1500302C25B00700B1784C /* LowBatteryWarningSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowBatteryWarningSession.swift; sourceTree = "<group>"; };
 		5A15002E2C25B00600B1784C /* LowBatteryCountdownTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowBatteryCountdownTimer.swift; sourceTree = "<group>"; };
 		4F229ABA243CC29500B1784C /* XSnooze.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = XSnooze.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4F229ABD243CC29500B1784C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				4F229ABD243CC29500B1784C /* AppDelegate.swift */,
 				5A1500002C25B00100B1784C /* LowBatteryPolicy.swift */,
 				5A15002E2C25B00600B1784C /* LowBatteryCountdownTimer.swift */,
+				5A1500302C25B00700B1784C /* LowBatteryWarningSession.swift */,
 				5A1500022C25B00100B1784C /* PowerSourceMonitor.swift */,
 				5A1500042C25B00100B1784C /* PrivilegedHelperClient.swift */,
 				5A1500282C25B00300B1784C /* PowerEventPolicy.swift */,
@@ -341,6 +344,7 @@
 				4F229ABE243CC29500B1784C /* AppDelegate.swift in Sources */,
 				5A1500012C25B00100B1784C /* LowBatteryPolicy.swift in Sources */,
 				5A15002F2C25B00600B1784C /* LowBatteryCountdownTimer.swift in Sources */,
+				5A1500312C25B00700B1784C /* LowBatteryWarningSession.swift in Sources */,
 				5A1500032C25B00100B1784C /* PowerSourceMonitor.swift in Sources */,
 				5A1500052C25B00100B1784C /* PrivilegedHelperClient.swift in Sources */,
 				5A1500072C25B00100B1784C /* PrivilegedHelperProtocol.swift in Sources */,
@@ -543,7 +547,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.5;
+				MARKETING_VERSION = 1.7.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
@@ -573,7 +577,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.5;
+				MARKETING_VERSION = 1.7.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
@@ -593,7 +597,7 @@
 				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.5;
+				MARKETING_VERSION = 1.7.6;
 				OTHER_LDFLAGS = (
 					"-sectcreate",
 					__TEXT,
@@ -619,7 +623,7 @@
 				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.5;
+				MARKETING_VERSION = 1.7.6;
 				OTHER_LDFLAGS = (
 					"-sectcreate",
 					__TEXT,

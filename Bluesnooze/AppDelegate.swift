@@ -230,7 +230,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let privilegedHelperClient = PrivilegedHelperClient()
     private var lowBatteryAlert: NSAlert?
     private var lowBatteryCountdownTimer: Timer?
-    private var lowBatteryWarningDeadline: Date?
+    private var lowBatteryWarningSession = LowBatteryWarningSession()
     private var lowBatteryTimedOut = false
     private var lowBatteryCanceled = false
     private var suppressedBatteryBucket: Int?
@@ -507,6 +507,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         AppLog.power.notice("Sleep notification received. source=\(decision.handlerSource, privacy: .public), iokitNotificationsAvailable=\(decision.iokitNotificationsAvailable, privacy: .public), iokitSleepObserved=\(decision.iokitSleepObserved, privacy: .public), skippedWirelessHandling=false")
+        lowBatteryWarningSession.willSleep()
+        cancelLowBatteryWarning()
         handleWirelessSleep(source: decision.handlerSource)
     }
 
@@ -542,7 +544,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         AppLog.power.notice("Wake notification received. source=\(decision.handlerSource, privacy: .public), skippedWirelessRestore=false")
+        cancelLowBatteryWarning()
+        lowBatteryWarningSession.didWake()
+        AppLog.hibernate.notice("Reset low-battery warning session after wake; next warning gets a full countdown.")
         handleWirelessWake()
+        // Re-check after the power handler and any aborted modal alert unwind.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let snapshot = self.powerSourceMonitor.currentSnapshot() else {
+                return
+            }
+            self.handlePowerSourceSnapshot(snapshot)
+        }
     }
 
     private func handleWirelessWake() {
@@ -746,6 +758,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         guard lowBatteryAlert == nil,
+              lowBatteryWarningSession.canStartWarning,
               LowBatteryPolicy.shouldStartWarning(for: snapshot, settings: lowBatterySettings, suppressedBucket: suppressedBatteryBucket),
               let bucket = LowBatteryPolicy.bucket(for: snapshot.chargePercentage, settings: lowBatterySettings) else {
             return
@@ -755,9 +768,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func showLowBatteryWarning(for snapshot: PowerSourceSnapshot, bucket: Int) {
+        guard lowBatteryWarningSession.beginCountdown(seconds: lowBatterySettings.countdownSeconds) else {
+            return
+        }
         lowBatteryTimedOut = false
         lowBatteryCanceled = false
-        lowBatteryWarningDeadline = Date().addingTimeInterval(TimeInterval(lowBatterySettings.countdownSeconds))
         AppLog.hibernate.notice("Showing low-battery warning. chargePercentage=\(snapshot.chargePercentage, privacy: .public), countdownSeconds=\(self.lowBatterySettings.countdownSeconds, privacy: .public), forceHibernateOnTimeout=\(self.lowBatterySettings.forceHibernateOnTimeout, privacy: .public)")
 
         let alert = NSAlert()
@@ -775,7 +790,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         lowBatteryCountdownTimer?.invalidate()
         lowBatteryCountdownTimer = nil
         lowBatteryAlert = nil
-        lowBatteryWarningDeadline = nil
+        lowBatteryWarningSession.endCountdown()
 
         if lowBatteryCanceled {
             return
@@ -803,11 +818,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
 
-        guard let deadline = lowBatteryWarningDeadline else {
+        guard let remainingSeconds = lowBatteryWarningSession.remainingSeconds() else {
             return
         }
 
-        let remainingSeconds = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
         updateLowBatteryAlertText(for: snapshot, remainingSeconds: remainingSeconds)
 
         if remainingSeconds <= 0 {
@@ -848,7 +862,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         lowBatteryCanceled = true
-        AppLog.hibernate.notice("Canceling low-battery warning because power conditions or settings changed.")
+        lowBatteryWarningSession.endCountdown()
+        AppLog.hibernate.notice("Canceling low-battery warning because power conditions, settings, or sleep state changed.")
         lowBatteryCountdownTimer?.invalidate()
         lowBatteryCountdownTimer = nil
         lowBatteryAlert?.window.orderOut(nil)
@@ -862,15 +877,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
 
+        guard let requestID = lowBatteryWarningSession.beginHibernateRequest() else {
+            AppLog.hibernate.notice("Skipping duplicate forced hibernation because the warning session is not ready.")
+            return
+        }
+
         AppLog.hibernate.notice("Requesting forced low-battery hibernation. chargePercentage=\(snapshot.chargePercentage, privacy: .public)")
         privilegedHelperClient.prepareHibernateAndSleep { [weak self] success, message in
-            guard !success else {
-                AppLog.hibernate.notice("Forced low-battery hibernation request succeeded.")
-                return
-            }
+            DispatchQueue.main.async {
+                guard let self,
+                      self.lowBatteryWarningSession.completeHibernateRequest(requestID, succeeded: success) else {
+                    AppLog.hibernate.notice("Ignoring hibernation reply from a previous warning session.")
+                    return
+                }
+                guard !success else {
+                    AppLog.hibernate.notice("Forced low-battery hibernation request succeeded.")
+                    return
+                }
 
-            AppLog.hibernate.error("Failed to prepare hibernation. message=\(message ?? "Unknown error", privacy: .public)")
-            self?.showHelperFailure(message: message)
+                AppLog.hibernate.error("Failed to prepare hibernation. message=\(message ?? "Unknown error", privacy: .public)")
+                self.showHelperFailure(message: message)
+            }
         }
     }
 
@@ -1309,7 +1336,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.5"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.6"
         return version
     }
 
@@ -1363,7 +1390,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             suppressedBatteryBucket = nil
             cancelLowBatteryWarning()
         } else if lowBatteryAlert != nil {
-            let remainingSeconds = lowBatteryWarningDeadline.map { max(0, Int(ceil($0.timeIntervalSinceNow))) } ?? settings.countdownSeconds
+            let remainingSeconds = lowBatteryWarningSession.remainingSeconds() ?? settings.countdownSeconds
             updateLowBatteryAlertText(for: snapshot, remainingSeconds: remainingSeconds)
         } else {
             handlePowerSourceSnapshot(snapshot)
