@@ -24,3 +24,5 @@
 "No XSnooze notice logs found in the last 24 hours." = "最近 24 小时没有找到 XSnooze notice 日志。";
 "Failed to load logs: %@" = "读取日志失败：%@";
 "Low Battery Sound" = "低电量提示音";
+"Alarm volume" = "警报音量：";
+"During the alarm, system volume and mute are temporarily adjusted, then restored. Other audio may be affected." = "响铃期间临时调整系统音量和静音，停止后恢复。其他声音可能受到影响。";

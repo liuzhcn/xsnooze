@@ -24,6 +24,7 @@ struct LowBatteryPolicyTests {
         let defaultSettings = LowBatterySettings()
         assertTrue(defaultSettings.soundEnabled, "Low-battery sounds should be enabled by default")
         soundSettingsPersistAcrossLaunches()
+        soundVolumeSettings()
         assertTrue(defaultSettings.isEnabled, "Low-battery reminders should be enabled by default")
         assertEqual(defaultSettings.thresholdPercentage, 30, "Default threshold should preserve 1.5.1 behavior")
         assertTrue(defaultSettings.forceHibernateOnTimeout, "Forced hibernation should be enabled by default")
@@ -93,6 +94,22 @@ struct LowBatteryPolicyTests {
         assertTrue(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: noHibernateSettings, suppressedBucket: nil), "Timeout settings should not affect reminder triggering")
         assertFalse(noHibernateSettings.canEditCountdown, "Countdown should be disabled when forced hibernation is disabled")
         assertTrue(defaultSettings.canEditCountdown, "Countdown should be editable when reminders and forced hibernation are enabled")
+    }
+
+    static func soundVolumeSettings() {
+        let suiteName = "XSnooze.SoundVolumeTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        assertEqual(LowBatterySettings(userDefaults: defaults).soundVolumePercentage, 50, "Existing installs should get a moderate default alarm volume")
+        assertEqual(LowBatterySettings(soundVolumePercentage: -5).soundVolumePercentage, 10, "Use the sound switch to disable alarms; enabled volume has a lower bound")
+        assertEqual(LowBatterySettings(soundVolumePercentage: 105).soundVolumePercentage, 100, "Alarm volume must not exceed 100 percent")
+        assertEqual(LowBatterySettings(soundVolumePercentage: 53).soundVolumePercentage, 55, "Alarm volume should use five-percent steps")
+        let settings = LowBatterySettings().with(soundVolumePercentage: 75)
+        settings.save(to: defaults)
+        assertEqual(LowBatterySettings(userDefaults: defaults), settings, "Alarm volume should survive relaunch")
+        assertEqual(settings.with(soundEnabled: false).soundVolumePercentage, 75, "Disabling sound should preserve its volume")
+        assertEqual(settings.with(thresholdPercentage: 20).soundVolumePercentage, 75, "Battery settings should preserve alarm volume")
+        assertEqual(settings.countdownSeconds, 60, "Alarm volume must not change the countdown")
     }
 
     static func soundSettingsPersistAcrossLaunches() {

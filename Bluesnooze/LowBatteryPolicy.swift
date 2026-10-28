@@ -12,6 +12,7 @@ struct LowBatterySettings: Equatable {
     static let forceHibernateOnTimeoutKey = "lowBatteryForceHibernateOnTimeout"
     static let countdownSecondsKey = "lowBatteryCountdownSeconds"
     static let soundEnabledKey = "lowBatterySoundEnabled"
+    static let soundVolumePercentageKey = "lowBatterySoundVolumePercentage"
 
     static let defaultIsEnabled = true
     static let defaultThresholdPercentage = 30
@@ -20,12 +21,15 @@ struct LowBatterySettings: Equatable {
     static let adjustmentStep = 5
     static let thresholdRange = 10...40
     static let countdownRange = 15...300
+    static let soundVolumeRange = 10...100
+    static let defaultSoundVolumePercentage = 50
 
     let isEnabled: Bool
     let thresholdPercentage: Int
     let forceHibernateOnTimeout: Bool
     let countdownSeconds: Int
     let soundEnabled: Bool
+    let soundVolumePercentage: Int
 
     var canEditCountdown: Bool {
         isEnabled && forceHibernateOnTimeout
@@ -36,13 +40,15 @@ struct LowBatterySettings: Equatable {
         thresholdPercentage: Int = defaultThresholdPercentage,
         forceHibernateOnTimeout: Bool = defaultForceHibernateOnTimeout,
         countdownSeconds: Int = defaultCountdownSeconds,
-        soundEnabled: Bool = true
+        soundEnabled: Bool = true,
+        soundVolumePercentage: Int = defaultSoundVolumePercentage
     ) {
         self.isEnabled = isEnabled
         self.thresholdPercentage = Self.normalizedValue(thresholdPercentage, in: Self.thresholdRange)
         self.forceHibernateOnTimeout = forceHibernateOnTimeout
         self.countdownSeconds = Self.normalizedValue(countdownSeconds, in: Self.countdownRange)
         self.soundEnabled = soundEnabled
+        self.soundVolumePercentage = Self.normalizedValue(soundVolumePercentage, in: Self.soundVolumeRange)
     }
 
     init(userDefaults: UserDefaults) {
@@ -56,7 +62,8 @@ struct LowBatterySettings: Equatable {
             thresholdPercentage: thresholdPercentage,
             forceHibernateOnTimeout: forceHibernateOnTimeout,
             countdownSeconds: countdownSeconds,
-            soundEnabled: userDefaults.object(forKey: Self.soundEnabledKey) as? Bool ?? true
+            soundEnabled: userDefaults.object(forKey: Self.soundEnabledKey) as? Bool ?? true,
+            soundVolumePercentage: userDefaults.object(forKey: Self.soundVolumePercentageKey) as? Int ?? Self.defaultSoundVolumePercentage
         )
     }
 
@@ -66,6 +73,7 @@ struct LowBatterySettings: Equatable {
         userDefaults.set(forceHibernateOnTimeout, forKey: Self.forceHibernateOnTimeoutKey)
         userDefaults.set(countdownSeconds, forKey: Self.countdownSecondsKey)
         userDefaults.set(soundEnabled, forKey: Self.soundEnabledKey)
+        userDefaults.set(soundVolumePercentage, forKey: Self.soundVolumePercentageKey)
     }
 
     func with(
@@ -73,14 +81,16 @@ struct LowBatterySettings: Equatable {
         thresholdPercentage: Int? = nil,
         forceHibernateOnTimeout: Bool? = nil,
         countdownSeconds: Int? = nil,
-        soundEnabled: Bool? = nil
+        soundEnabled: Bool? = nil,
+        soundVolumePercentage: Int? = nil
     ) -> LowBatterySettings {
         LowBatterySettings(
             isEnabled: isEnabled ?? self.isEnabled,
             thresholdPercentage: thresholdPercentage ?? self.thresholdPercentage,
             forceHibernateOnTimeout: forceHibernateOnTimeout ?? self.forceHibernateOnTimeout,
             countdownSeconds: countdownSeconds ?? self.countdownSeconds,
-            soundEnabled: soundEnabled ?? self.soundEnabled
+            soundEnabled: soundEnabled ?? self.soundEnabled,
+            soundVolumePercentage: soundVolumePercentage ?? self.soundVolumePercentage
         )
     }
 

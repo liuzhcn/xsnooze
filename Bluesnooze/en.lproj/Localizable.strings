@@ -24,3 +24,5 @@
 "No XSnooze notice logs found in the last 24 hours." = "No XSnooze notice logs found in the last 24 hours.";
 "Failed to load logs: %@" = "Failed to load logs: %@";
 "Low Battery Sound" = "Low Battery Sound";
+"Alarm volume" = "Alarm volume:";
+"During the alarm, system volume and mute are temporarily adjusted, then restored. Other audio may be affected." = "During the alarm, system volume and mute are temporarily adjusted, then restored. Other audio may be affected.";

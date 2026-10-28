@@ -1,16 +1,10 @@
 import Foundation
 
 struct LowBatteryWarningSession {
-    enum SoundCue: Int {
-        case initial = 1
-        case tenSeconds = 2
-        case fiveSeconds = 3
-    }
-
     private(set) var deadline: Date?
     private var hibernateRequestID: UUID?
     private var isSleeping = false
-    private var soundStage = 0
+    private var alarmStarted = false
 
     var canStartWarning: Bool {
         deadline == nil && hibernateRequestID == nil && !isSleeping
@@ -21,33 +15,21 @@ struct LowBatteryWarningSession {
             return false
         }
         deadline = now.addingTimeInterval(TimeInterval(seconds))
-        soundStage = 0
+        alarmStarted = false
         return true
     }
 
-    mutating func consumeSoundCue(enabled: Bool, at now: Date = Date()) -> SoundCue? {
-        guard let remaining = remainingSeconds(at: now) else {
-            return nil
+    mutating func consumeAlarmStart(enabled: Bool, at now: Date = Date()) -> Bool {
+        guard enabled, !alarmStarted, let remaining = remainingSeconds(at: now),
+              remaining > 0, remaining <= 30 else {
+            return false
         }
-        guard remaining > 0 else {
-            soundStage = SoundCue.fiveSeconds.rawValue
-            return nil
-        }
+        alarmStarted = true
+        return true
+    }
 
-        let cue: SoundCue
-        if remaining <= 5 {
-            cue = .fiveSeconds
-        } else if remaining <= 10 {
-            cue = .tenSeconds
-        } else {
-            cue = .initial
-        }
-        guard cue.rawValue > soundStage else {
-            return nil
-        }
-        // Consume muted and skipped cues too: never replay them or catch up in a burst.
-        soundStage = cue.rawValue
-        return enabled ? cue : nil
+    mutating func resetAlarm() {
+        alarmStarted = false
     }
 
     func remainingSeconds(at now: Date = Date()) -> Int? {

@@ -47,11 +47,18 @@ configured countdown ends, XSnooze can temporarily switch Battery Power sleep
 mode to `hibernatemode 25`, put the Mac to sleep, and restore the previous sleep
 mode after the next wake or app launch.
 
-Low Battery Sound is enabled by default. A short system sound plays when the
-reminder appears and again with 10 and 5 seconds remaining. Confirming the
-reminder, connecting power, or sleeping cancels further sounds. Turn it off in
-the app menu if needed. Sounds follow system volume and mute settings; missing
-or muted audio does not delay the countdown or hibernation.
+Low Battery Sound is enabled by default. The default 60-second countdown is
+silent for its first 30 seconds, then loops the alarm for the final 30 seconds.
+Shorter countdowns ring throughout; longer ones ring only in the final 30 seconds.
+Alarm volume is saved independently (10–100%, default 50%). During playback,
+XSnooze temporarily adjusts the current output device's volume and unmutes it,
+then restores its original settings when playback ends, is canceled, or the Mac
+sleeps. Other audio on the same output is affected during this interval. Manual
+volume changes made during playback are preserved. Recovery data is retained
+for disconnected devices or the next app launch after an interruption; an app
+crash may leave the temporary settings in place until recovery. Outputs without
+writable volume controls cannot use this alarm. Audio errors never delay the
+countdown or hibernation.
 
 ![Screenshot showing XSnooze in the status bar](images/screenshot.png)
 
@@ -135,9 +142,15 @@ XSnooze 会在 Mac 进入睡眠时按配置关闭蓝牙和 Wi-Fi，并在 Mac �
 `hibernatemode 25`，让 Mac 立即睡眠，并在下次唤醒或 App 启动后恢复原来的
 睡眠模式。
 
-“低电量提示音”默认开启：提醒弹出时、倒计时剩余 10 秒和 5 秒时各响一次。
-确认提醒、接上电源或进入睡眠后停止后续响铃，也可以在菜单中关闭提示音。
-提示音遵循系统音量和静音设置；静音或播放失败不会延迟倒计时和休眠。
+“低电量提示音”默认开启。默认 60 秒倒计时的前 30 秒不响，后 30 秒循环响铃；
+倒计时不足 30 秒时全程响铃，超过 60 秒时仍只在最后 30 秒响铃。
+“警报音量”独立保存，可设置为 10%–100%，默认 50%。响铃期间，XSnooze 临时
+调整当前输出设备的音量并取消静音；确认提醒、接上电源、关闭提示音、倒计时
+结束或进入睡眠时停止响铃并恢复原设置。这段时间内，同一设备上的其他声音
+也会受影响；响铃期间手动调整的音量会保留。设备断开时保留恢复记录，重新
+连接后重试；应用意外退出后会在下次启动时尝试恢复，因此崩溃可能使临时设置
+保留到恢复时。没有可写音量控制的输出设备不能使用此警报。声音播放或恢复
+失败不会延迟倒计时和休眠。
 
 ## 安装
 
