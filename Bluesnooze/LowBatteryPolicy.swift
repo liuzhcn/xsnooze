@@ -11,6 +11,7 @@ struct LowBatterySettings: Equatable {
     static let thresholdPercentageKey = "lowBatteryThresholdPercentage"
     static let forceHibernateOnTimeoutKey = "lowBatteryForceHibernateOnTimeout"
     static let countdownSecondsKey = "lowBatteryCountdownSeconds"
+    static let soundEnabledKey = "lowBatterySoundEnabled"
 
     static let defaultIsEnabled = true
     static let defaultThresholdPercentage = 30
@@ -24,6 +25,7 @@ struct LowBatterySettings: Equatable {
     let thresholdPercentage: Int
     let forceHibernateOnTimeout: Bool
     let countdownSeconds: Int
+    let soundEnabled: Bool
 
     var canEditCountdown: Bool {
         isEnabled && forceHibernateOnTimeout
@@ -33,12 +35,14 @@ struct LowBatterySettings: Equatable {
         isEnabled: Bool = defaultIsEnabled,
         thresholdPercentage: Int = defaultThresholdPercentage,
         forceHibernateOnTimeout: Bool = defaultForceHibernateOnTimeout,
-        countdownSeconds: Int = defaultCountdownSeconds
+        countdownSeconds: Int = defaultCountdownSeconds,
+        soundEnabled: Bool = true
     ) {
         self.isEnabled = isEnabled
         self.thresholdPercentage = Self.normalizedValue(thresholdPercentage, in: Self.thresholdRange)
         self.forceHibernateOnTimeout = forceHibernateOnTimeout
         self.countdownSeconds = Self.normalizedValue(countdownSeconds, in: Self.countdownRange)
+        self.soundEnabled = soundEnabled
     }
 
     init(userDefaults: UserDefaults) {
@@ -51,7 +55,8 @@ struct LowBatterySettings: Equatable {
             isEnabled: isEnabled,
             thresholdPercentage: thresholdPercentage,
             forceHibernateOnTimeout: forceHibernateOnTimeout,
-            countdownSeconds: countdownSeconds
+            countdownSeconds: countdownSeconds,
+            soundEnabled: userDefaults.object(forKey: Self.soundEnabledKey) as? Bool ?? true
         )
     }
 
@@ -60,19 +65,22 @@ struct LowBatterySettings: Equatable {
         userDefaults.set(thresholdPercentage, forKey: Self.thresholdPercentageKey)
         userDefaults.set(forceHibernateOnTimeout, forKey: Self.forceHibernateOnTimeoutKey)
         userDefaults.set(countdownSeconds, forKey: Self.countdownSecondsKey)
+        userDefaults.set(soundEnabled, forKey: Self.soundEnabledKey)
     }
 
     func with(
         isEnabled: Bool? = nil,
         thresholdPercentage: Int? = nil,
         forceHibernateOnTimeout: Bool? = nil,
-        countdownSeconds: Int? = nil
+        countdownSeconds: Int? = nil,
+        soundEnabled: Bool? = nil
     ) -> LowBatterySettings {
         LowBatterySettings(
             isEnabled: isEnabled ?? self.isEnabled,
             thresholdPercentage: thresholdPercentage ?? self.thresholdPercentage,
             forceHibernateOnTimeout: forceHibernateOnTimeout ?? self.forceHibernateOnTimeout,
-            countdownSeconds: countdownSeconds ?? self.countdownSeconds
+            countdownSeconds: countdownSeconds ?? self.countdownSeconds,
+            soundEnabled: soundEnabled ?? self.soundEnabled
         )
     }
 

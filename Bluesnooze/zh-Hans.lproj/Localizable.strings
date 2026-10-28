@@ -23,3 +23,4 @@
 "Loading logs..." = "正在加载日志...";
 "No XSnooze notice logs found in the last 24 hours." = "最近 24 小时没有找到 XSnooze notice 日志。";
 "Failed to load logs: %@" = "读取日志失败：%@";
+"Low Battery Sound" = "低电量提示音";

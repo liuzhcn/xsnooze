@@ -231,6 +231,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var lowBatteryAlert: NSAlert?
     private var lowBatteryCountdownTimer: Timer?
     private var lowBatteryWarningSession = LowBatteryWarningSession()
+    private let lowBatterySound = NSSound(named: NSSound.Name("Glass"))
+    private var lowBatterySoundControl: NSControl?
+    private var lowBatterySoundCheckmark: NSTextField?
+    private var lowBatterySoundTitleLabel: NSTextField?
     private var lowBatteryTimedOut = false
     private var lowBatteryCanceled = false
     private var suppressedBatteryBucket: Int?
@@ -367,6 +371,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @objc private func lowBatteryReminderClicked(_ sender: NSMenuItem) {
         updateLowBatterySettings(lowBatterySettings.with(isEnabled: !lowBatterySettings.isEnabled))
+    }
+
+    @objc private func lowBatterySoundClicked(_ sender: NSControl) {
+        updateLowBatterySettings(lowBatterySettings.with(soundEnabled: !lowBatterySettings.soundEnabled))
     }
 
     @objc private func lowBatteryThresholdDecrementClicked(_ sender: NSButton) {
@@ -781,12 +789,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         alert.addButton(withTitle: NSLocalizedString("OK", comment: "Low battery alert confirmation button"))
         lowBatteryAlert = alert
         updateLowBatteryAlertText(for: snapshot, remainingSeconds: lowBatterySettings.countdownSeconds)
+        playLowBatterySoundIfNeeded()
 
         lowBatteryCountdownTimer = LowBatteryCountdownTimer.scheduledTimer { [weak self] _ in
             self?.tickLowBatteryCountdown(snapshot: snapshot)
         }
 
         let response = alert.runModal()
+        lowBatterySound?.stop()
         lowBatteryCountdownTimer?.invalidate()
         lowBatteryCountdownTimer = nil
         lowBatteryAlert = nil
@@ -823,15 +833,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         updateLowBatteryAlertText(for: snapshot, remainingSeconds: remainingSeconds)
+        playLowBatterySoundIfNeeded()
 
         if remainingSeconds <= 0 {
             AppLog.hibernate.notice("Low-battery warning countdown expired. forceHibernateOnTimeout=\(self.lowBatterySettings.forceHibernateOnTimeout, privacy: .public)")
             lowBatteryTimedOut = true
+            lowBatterySound?.stop()
             lowBatteryCountdownTimer?.invalidate()
             lowBatteryCountdownTimer = nil
             lowBatteryAlert?.window.orderOut(nil)
             NSApp.abortModal()
         }
+    }
+
+    private func playLowBatterySoundIfNeeded() {
+        guard let cue = lowBatteryWarningSession.consumeSoundCue(enabled: lowBatterySettings.soundEnabled) else {
+            return
+        }
+        // NSSound plays asynchronously at the system volume. Audio failure must
+        // never interrupt the countdown or the privileged hibernation request.
+        lowBatterySound?.stop()
+        let started = lowBatterySound?.play() ?? false
+        AppLog.hibernate.notice("Low-battery sound cue. stage=\(cue.rawValue, privacy: .public), playbackStarted=\(started, privacy: .public)")
     }
 
     private func updateLowBatteryAlertText(for snapshot: PowerSourceSnapshot, remainingSeconds: Int) {
@@ -862,6 +885,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         lowBatteryCanceled = true
+        lowBatterySound?.stop()
         lowBatteryWarningSession.endCountdown()
         AppLog.hibernate.notice("Canceling low-battery warning because power conditions, settings, or sleep state changed.")
         lowBatteryCountdownTimer?.invalidate()
@@ -1173,7 +1197,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func makeStatusPopoverView() -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 260))
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 288))
 
         let launchRow = makeMenuToggleRow(
             title: NSLocalizedString("Launch at login", comment: "Launch at login menu item"),
@@ -1201,15 +1225,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             title: NSLocalizedString("Low Battery Reminder", comment: "Low battery reminder menu item"),
             action: #selector(lowBatteryReminderClicked(_:))
         )
-        lowBatteryReminderRow.checkmark.frame.origin = NSPoint(x: 12, y: 232)
-        lowBatteryReminderRow.titleLabel.frame = NSRect(x: 26, y: 230, width: 260, height: 18)
-        lowBatteryReminderRow.control.frame = NSRect(x: 8, y: 228, width: 284, height: 22)
+        lowBatteryReminderRow.checkmark.frame.origin = NSPoint(x: 12, y: 260)
+        lowBatteryReminderRow.titleLabel.frame = NSRect(x: 26, y: 258, width: 260, height: 18)
+        lowBatteryReminderRow.control.frame = NSRect(x: 8, y: 256, width: 284, height: 22)
         view.addSubview(lowBatteryReminderRow.control)
         view.addSubview(lowBatteryReminderRow.checkmark)
         view.addSubview(lowBatteryReminderRow.titleLabel)
 
         let thresholdLabel = makeLowBatteryLabel()
-        thresholdLabel.frame = NSRect(x: 44, y: 198, width: 140, height: 18)
+        thresholdLabel.frame = NSRect(x: 44, y: 226, width: 140, height: 18)
         view.addSubview(thresholdLabel)
 
         let thresholdStepper = makeLowBatteryStepper(
@@ -1217,9 +1241,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             decrementAction: #selector(lowBatteryThresholdDecrementClicked(_:)),
             incrementAction: #selector(lowBatteryThresholdIncrementClicked(_:))
         )
-        thresholdStepper.decrementButton.frame.origin = NSPoint(x: 184, y: 195)
-        thresholdStepper.valueLabel.frame.origin = NSPoint(x: 212, y: 198)
-        thresholdStepper.incrementButton.frame.origin = NSPoint(x: 260, y: 195)
+        thresholdStepper.decrementButton.frame.origin = NSPoint(x: 184, y: 223)
+        thresholdStepper.valueLabel.frame.origin = NSPoint(x: 212, y: 226)
+        thresholdStepper.incrementButton.frame.origin = NSPoint(x: 260, y: 223)
         view.addSubview(thresholdStepper.decrementButton)
         view.addSubview(thresholdStepper.valueLabel)
         view.addSubview(thresholdStepper.incrementButton)
@@ -1228,15 +1252,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             title: NSLocalizedString("Hibernate if no response", comment: "Low battery force hibernation checkbox"),
             action: #selector(lowBatteryForceHibernateClicked(_:))
         )
-        forceHibernateRow.checkmark.frame.origin = NSPoint(x: 30, y: 174)
-        forceHibernateRow.titleLabel.frame = NSRect(x: 44, y: 172, width: 242, height: 18)
-        forceHibernateRow.control.frame = NSRect(x: 26, y: 170, width: 266, height: 22)
+        forceHibernateRow.checkmark.frame.origin = NSPoint(x: 30, y: 202)
+        forceHibernateRow.titleLabel.frame = NSRect(x: 44, y: 200, width: 242, height: 18)
+        forceHibernateRow.control.frame = NSRect(x: 26, y: 198, width: 266, height: 22)
         view.addSubview(forceHibernateRow.control)
         view.addSubview(forceHibernateRow.checkmark)
         view.addSubview(forceHibernateRow.titleLabel)
 
         let countdownLabel = makeLowBatteryLabel()
-        countdownLabel.frame = NSRect(x: 44, y: 142, width: 140, height: 18)
+        countdownLabel.frame = NSRect(x: 44, y: 170, width: 140, height: 18)
         view.addSubview(countdownLabel)
 
         let countdownStepper = makeLowBatteryStepper(
@@ -1244,12 +1268,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             decrementAction: #selector(lowBatteryCountdownDecrementClicked(_:)),
             incrementAction: #selector(lowBatteryCountdownIncrementClicked(_:))
         )
-        countdownStepper.decrementButton.frame.origin = NSPoint(x: 184, y: 139)
-        countdownStepper.valueLabel.frame.origin = NSPoint(x: 212, y: 142)
-        countdownStepper.incrementButton.frame.origin = NSPoint(x: 260, y: 139)
+        countdownStepper.decrementButton.frame.origin = NSPoint(x: 184, y: 167)
+        countdownStepper.valueLabel.frame.origin = NSPoint(x: 212, y: 170)
+        countdownStepper.incrementButton.frame.origin = NSPoint(x: 260, y: 167)
         view.addSubview(countdownStepper.decrementButton)
         view.addSubview(countdownStepper.valueLabel)
         view.addSubview(countdownStepper.incrementButton)
+
+        let soundRow = makeMenuToggleRow(
+            title: NSLocalizedString("Low Battery Sound", comment: "Low battery sound toggle"),
+            action: #selector(lowBatterySoundClicked(_:))
+        )
+        soundRow.checkmark.frame.origin = NSPoint(x: 30, y: 146)
+        soundRow.titleLabel.frame = NSRect(x: 44, y: 144, width: 242, height: 18)
+        soundRow.control.frame = NSRect(x: 26, y: 142, width: 266, height: 22)
+        view.addSubview(soundRow.control)
+        view.addSubview(soundRow.checkmark)
+        view.addSubview(soundRow.titleLabel)
+        lowBatterySoundControl = soundRow.control
+        lowBatterySoundCheckmark = soundRow.checkmark
+        lowBatterySoundTitleLabel = soundRow.titleLabel
 
         view.addSubview(makeSeparator(frame: NSRect(x: 0, y: 130, width: 300, height: 1)))
 
@@ -1336,7 +1374,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.6"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.7"
         return version
     }
 
@@ -1373,6 +1411,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func updateLowBatterySettings(_ settings: LowBatterySettings) {
         lowBatterySettings = settings
+        if !settings.soundEnabled {
+            lowBatterySound?.stop()
+        }
         settings.save(to: .standard)
         setLowBatteryMenuState()
 
@@ -1400,6 +1441,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func setLowBatteryMenuState() {
         lowBatteryReminderMenuItem?.state = lowBatterySettings.isEnabled ? .on : .off
         lowBatteryReminderCheckmark?.isHidden = !lowBatterySettings.isEnabled
+        lowBatterySoundCheckmark?.isHidden = !lowBatterySettings.soundEnabled
+        lowBatterySoundControl?.isEnabled = lowBatterySettings.isEnabled
+        lowBatterySoundControl?.alphaValue = lowBatterySettings.isEnabled ? 1.0 : disabledLowBatteryControlAlpha
+        lowBatterySoundCheckmark?.alphaValue = lowBatterySettings.isEnabled ? 1.0 : disabledLowBatteryControlAlpha
+        lowBatterySoundTitleLabel?.textColor = lowBatterySettings.isEnabled ? .labelColor : .disabledControlTextColor
         lowBatteryThresholdLabel?.stringValue = NSLocalizedString("Battery alert threshold", comment: "Low battery threshold setting label")
         lowBatteryThresholdValueLabel?.stringValue = String(
             format: NSLocalizedString("%d%%", comment: "Low battery threshold value"),

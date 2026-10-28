@@ -22,6 +22,8 @@ func assertFalse(_ value: Bool, _ message: String) {
 struct LowBatteryPolicyTests {
     static func main() {
         let defaultSettings = LowBatterySettings()
+        assertTrue(defaultSettings.soundEnabled, "Low-battery sounds should be enabled by default")
+        soundSettingsPersistAcrossLaunches()
         assertTrue(defaultSettings.isEnabled, "Low-battery reminders should be enabled by default")
         assertEqual(defaultSettings.thresholdPercentage, 30, "Default threshold should preserve 1.5.1 behavior")
         assertTrue(defaultSettings.forceHibernateOnTimeout, "Forced hibernation should be enabled by default")
@@ -91,5 +93,22 @@ struct LowBatteryPolicyTests {
         assertTrue(LowBatteryPolicy.shouldStartWarning(for: unpluggedLowBattery, settings: noHibernateSettings, suppressedBucket: nil), "Timeout settings should not affect reminder triggering")
         assertFalse(noHibernateSettings.canEditCountdown, "Countdown should be disabled when forced hibernation is disabled")
         assertTrue(defaultSettings.canEditCountdown, "Countdown should be editable when reminders and forced hibernation are enabled")
+    }
+
+    static func soundSettingsPersistAcrossLaunches() {
+        let suiteName = "XSnooze.LowBatteryPolicyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(25, forKey: LowBatterySettings.thresholdPercentageKey)
+        let migrated = LowBatterySettings(userDefaults: defaults)
+        assertTrue(migrated.soundEnabled, "Existing installs without a sound preference should enable it")
+        assertEqual(migrated.thresholdPercentage, 25, "Adding sound should preserve existing preferences")
+        let muted = migrated.with(soundEnabled: false)
+        muted.save(to: defaults)
+        assertEqual(LowBatterySettings(userDefaults: defaults), muted, "Sound opt-out should survive relaunch")
+        assertFalse(muted.with(countdownSeconds: 90).soundEnabled, "Other setting changes must preserve sound opt-out")
+        let enabled = muted.with(soundEnabled: true)
+        enabled.save(to: defaults)
+        assertEqual(LowBatterySettings(userDefaults: defaults), enabled, "Sound opt-in should survive relaunch")
     }
 }

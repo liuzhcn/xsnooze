@@ -23,3 +23,4 @@
 "Loading logs..." = "Loading logs...";
 "No XSnooze notice logs found in the last 24 hours." = "No XSnooze notice logs found in the last 24 hours.";
 "Failed to load logs: %@" = "Failed to load logs: %@";
+"Low Battery Sound" = "Low Battery Sound";

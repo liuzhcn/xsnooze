@@ -20,6 +20,10 @@ struct LowBatteryWarningSessionTests {
         failureAllowsRetry()
         staleReplyCannotChangeANewRequest()
         cancellationAllowsAnotherWarning()
+        soundCuesFireOnceAtEachBoundary()
+        delayedTicksDoNotBurstOrDelayHibernation()
+        mutedCuesAreConsumedWithoutChangingCountdown()
+        cancellationAndSleepDiscardSounds()
         if failures > 0 {
             exit(1)
         }
@@ -105,5 +109,69 @@ struct LowBatteryWarningSessionTests {
         check(session.remainingSeconds(at: start) == nil, "Cancellation must remove the deadline")
         check(session.beginCountdown(seconds: 15, at: start), "Cancellation should allow a fresh warning")
         check(session.remainingSeconds(at: start) == 15, "New countdown should respect configured duration")
+    }
+
+    static func soundCuesFireOnceAtEachBoundary() {
+        for duration in [15, 60, 300] {
+            var session = LowBatteryWarningSession()
+            _ = session.beginCountdown(seconds: duration, at: start)
+            check(session.consumeSoundCue(enabled: true, at: start) == .initial, "Each duration should play an initial cue")
+            check(session.consumeSoundCue(enabled: true, at: start) == nil, "Repeated initial tick must stay silent")
+            let tenSeconds = start.addingTimeInterval(Double(duration - 10))
+            check(session.consumeSoundCue(enabled: true, at: tenSeconds.addingTimeInterval(-0.1)) == nil, "Do not ring before the displayed countdown reaches 10")
+            check(session.consumeSoundCue(enabled: true, at: tenSeconds) == .tenSeconds, "Ring at 10 seconds")
+            check(session.consumeSoundCue(enabled: true, at: tenSeconds.addingTimeInterval(1)) == nil, "Do not ring again at 9 seconds")
+            check(session.consumeSoundCue(enabled: true, at: tenSeconds.addingTimeInterval(5)) == .fiveSeconds, "Ring at 5 seconds")
+            check(session.consumeSoundCue(enabled: true, at: tenSeconds.addingTimeInterval(6)) == nil, "Do not ring again at 4 seconds")
+            check(session.consumeSoundCue(enabled: true, at: tenSeconds.addingTimeInterval(10)) == nil, "No extra sound at timeout")
+        }
+    }
+
+    static func delayedTicksDoNotBurstOrDelayHibernation() {
+        var session = LowBatteryWarningSession()
+        _ = session.beginCountdown(seconds: 60, at: start)
+        _ = session.consumeSoundCue(enabled: true, at: start)
+        let delayed = start.addingTimeInterval(56)
+        check(session.consumeSoundCue(enabled: true, at: delayed) == .fiveSeconds, "A delayed tick should only play the most urgent cue")
+        check(session.consumeSoundCue(enabled: true, at: delayed) == nil, "Do not catch up skipped sounds in a burst")
+        check(session.consumeSoundCue(enabled: true, at: start.addingTimeInterval(50)) == nil, "Clock changes must not replay a consumed stage")
+        check(session.remainingSeconds(at: start.addingTimeInterval(60)) == 0, "Sound scheduling must not extend the deadline")
+        session.endCountdown()
+        check(session.beginHibernateRequest() != nil, "Sound scheduling must not block hibernation")
+
+        var expired = LowBatteryWarningSession()
+        _ = expired.beginCountdown(seconds: 60, at: start)
+        check(expired.consumeSoundCue(enabled: true, at: start.addingTimeInterval(61)) == nil, "Do not play overdue sounds after timeout")
+    }
+
+    static func mutedCuesAreConsumedWithoutChangingCountdown() {
+        var session = LowBatteryWarningSession()
+        _ = session.beginCountdown(seconds: 60, at: start)
+        check(session.consumeSoundCue(enabled: false, at: start) == nil, "Disabled sound must stay silent")
+        check(session.consumeSoundCue(enabled: true, at: start.addingTimeInterval(1)) == nil, "Enabling sound must not replay the initial cue")
+        check(session.consumeSoundCue(enabled: false, at: start.addingTimeInterval(50)) == nil, "Muted 10-second cue must stay silent")
+        check(session.consumeSoundCue(enabled: true, at: start.addingTimeInterval(51)) == nil, "Do not replay a muted stage")
+        check(session.consumeSoundCue(enabled: true, at: start.addingTimeInterval(55)) == .fiveSeconds, "Future stages should use the current sound setting")
+        check(session.remainingSeconds(at: start.addingTimeInterval(60)) == 0, "Sound setting must not change timeout")
+    }
+
+    static func cancellationAndSleepDiscardSounds() {
+        var session = LowBatteryWarningSession()
+        check(session.consumeSoundCue(enabled: true, at: start) == nil, "No sound without a warning")
+        _ = session.beginCountdown(seconds: 60, at: start)
+        _ = session.consumeSoundCue(enabled: true, at: start)
+        // Acknowledgement, AC power and disabling reminders all end the countdown.
+        session.endCountdown()
+        check(session.consumeSoundCue(enabled: true, at: start.addingTimeInterval(50)) == nil, "Cancellation must discard future sounds")
+        _ = session.beginCountdown(seconds: 60, at: start)
+        check(session.consumeSoundCue(enabled: true, at: start) == .initial, "New warning should reset sound stages")
+        session.willSleep()
+        check(session.consumeSoundCue(enabled: true, at: start.addingTimeInterval(55)) == nil, "Sleeping must discard future sounds")
+        session.didWake()
+        let wake = start.addingTimeInterval(3600)
+        check(session.consumeSoundCue(enabled: true, at: wake) == nil, "Wake alone must not replay old sounds")
+        _ = session.beginCountdown(seconds: 60, at: wake)
+        check(session.consumeSoundCue(enabled: true, at: wake) == .initial, "Fresh warning after wake should ring once")
+        check(session.consumeSoundCue(enabled: true, at: wake.addingTimeInterval(1)) == nil, "Fresh warning must not replay old 10- or 5-second cues")
     }
 }

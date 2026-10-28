@@ -44,6 +44,12 @@ configured countdown ends, XSnooze can temporarily switch Battery Power sleep
 mode to `hibernatemode 25`, put the Mac to sleep, and restore the previous sleep
 mode after the next wake or app launch.
 
+Low Battery Sound is enabled by default. A short system sound plays when the
+reminder appears and again with 10 and 5 seconds remaining. Confirming the
+reminder, connecting power, or sleeping cancels further sounds. Turn it off in
+the app menu if needed. Sounds follow system volume and mute settings; missing
+or muted audio does not delay the countdown or hibernation.
+
 ![Screenshot showing XSnooze in the status bar](images/screenshot.png)
 
 ## Installation
@@ -125,6 +131,10 @@ XSnooze 会在 Mac 进入睡眠时按配置关闭蓝牙和 Wi-Fi，并在 Mac �
 果倒计时结束前无人确认，XSnooze 可以临时把电池供电下的睡眠模式切换为
 `hibernatemode 25`，让 Mac 立即睡眠，并在下次唤醒或 App 启动后恢复原来的
 睡眠模式。
+
+“低电量提示音”默认开启：提醒弹出时、倒计时剩余 10 秒和 5 秒时各响一次。
+确认提醒、接上电源或进入睡眠后停止后续响铃，也可以在菜单中关闭提示音。
+提示音遵循系统音量和静音设置；静音或播放失败不会延迟倒计时和休眠。
 
 ## 安装
 
