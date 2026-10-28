@@ -226,6 +226,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setPowerState: { IOBluetoothPreferenceSetControllerPowerState($0) },
         wait: { Thread.sleep(forTimeInterval: $0) }
     )
+    private lazy var bluetoothRestoreSession = BluetoothRestoreSession(
+        defaults: .standard,
+        stateKey: bluetoothWasOnBeforeSleepKey,
+        requestPowerOn: { [unowned self] in
+            self.setBluetoothPower(true, reason: "restore", source: "BluetoothRestoreSession")
+        },
+        schedule: { delay, action in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+        },
+        log: { message in
+            AppLog.bluetooth.notice("\(message, privacy: .public)")
+        }
+    )
     private let powerSourceMonitor = PowerSourceMonitor()
     private let privilegedHelperClient = PrivilegedHelperClient()
     private var lowBatteryAlert: NSAlert?
@@ -272,6 +285,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setupNotificationHandlers()
         privilegedHelperClient.restoreHibernationModeIfNeeded()
         setupWirelessStateMonitor()
+        bluetoothRestoreSession.didWake()
         setupLowBatteryMonitor()
     }
     
@@ -572,18 +586,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         privilegedHelperClient.restoreHibernationModeIfNeeded()
 
-        switch bluetoothWasOn {
-        case true:
-            if cachedBluetoothWasOn == true {
-                AppLog.bluetooth.notice("Skipping Bluetooth on request because Bluetooth is already on according to CoreBluetooth cache.")
-            } else {
-                setBluetoothPower(true, reason: "wake", source: "NSWorkspace")
-            }
-        case false:
-            AppLog.bluetooth.notice("Skipping Bluetooth on request because Bluetooth was off before sleep.")
-        case nil:
-            AppLog.bluetooth.notice("Skipping Bluetooth on request because pre-sleep Bluetooth state is unknown.")
-        }
+        bluetoothRestoreSession.didWake()
 
         switch wifiWasOn {
         case true:
@@ -594,10 +597,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             AppLog.wifi.notice("Skipping Wi-Fi on request because pre-sleep Wi-Fi state is unknown.")
         }
 
-        clearStoredPowerStates()
+        clearStoredWiFiState()
     }
 
-    private func setBluetoothPower(_ powerOn: Bool, reason: String, source: String) {
+    @discardableResult
+    private func setBluetoothPower(_ powerOn: Bool, reason: String, source: String) -> BluetoothPowerResult {
         AppLog.bluetooth.notice("Requesting Bluetooth power state. reason=\(reason, privacy: .public), source=\(source, privacy: .public), powerOn=\(powerOn, privacy: .public)")
         let forceSetter = reason == "sleep"
         let minimumWaitAfterSetter = forceSetter ? 1.0 : 0
@@ -621,6 +625,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         case .timedOut:
             AppLog.bluetooth.warning("Bluetooth power request timed out. reason=\(reason, privacy: .public), requestedPowerOn=\(powerOn, privacy: .public), observedPowerOn=\(self.stateDescription(result.observedPowerOn), privacy: .public), timeoutSeconds=3.0")
         }
+        return result
     }
 
     private func setWiFi(powerOn: Bool, verify: Bool = true) {
@@ -644,10 +649,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
-    private func clearStoredPowerStates() {
-        UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
+    private func clearStoredWiFiState() {
         UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
-        AppLog.power.notice("Cleared stored pre-sleep wireless state.")
+        AppLog.power.notice("Cleared stored pre-sleep Wi-Fi state.")
     }
 
     private func setupWirelessStateMonitor() {
@@ -697,11 +701,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func storePreSleepWirelessState(_ decision: WirelessSleepDecision) {
-        if let bluetoothWasOn = decision.bluetoothWasOn {
-            UserDefaults.standard.set(bluetoothWasOn, forKey: bluetoothWasOnBeforeSleepKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: bluetoothWasOnBeforeSleepKey)
-        }
+        bluetoothRestoreSession.willSleep(cachedPowerOn: decision.bluetoothWasOn)
 
         if let wifiWasOn = decision.wifiWasOn {
             UserDefaults.standard.set(wifiWasOn, forKey: wifiWasOnBeforeSleepKey)
@@ -709,7 +709,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             UserDefaults.standard.removeObject(forKey: wifiWasOnBeforeSleepKey)
         }
 
-        AppLog.power.notice("Stored cached pre-sleep wireless state. bluetoothWasOn=\(self.stateDescription(decision.bluetoothWasOn), privacy: .public), wifiWasOn=\(self.stateDescription(decision.wifiWasOn), privacy: .public)")
+        AppLog.power.notice("Sampled pre-sleep wireless state (pending Bluetooth restore is preserved separately). bluetoothWasOn=\(self.stateDescription(decision.bluetoothWasOn), privacy: .public), wifiWasOn=\(self.stateDescription(decision.wifiWasOn), privacy: .public)")
     }
 
     private func storedBool(forKey key: String) -> Bool? {

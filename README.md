@@ -22,6 +22,9 @@ Please note the latest release requires macOS Monterey (12.0) or higher.
 - Bluetooth permission usage description for modern macOS.
 - Bluetooth and Wi-Fi are turned off during sleep if they were on before sleep.
 - Bluetooth and Wi-Fi are restored after wake only if they were on before sleep.
+- Failed Bluetooth restores are retried up to three times, after delays of 2, 5,
+  and 10 seconds. Unfinished restores survive subsequent sleep cycles and app
+  restarts; retry timers are canceled when the Mac sleeps.
 - Low-battery protection can warn at a configurable battery percentage and can
   hibernate the Mac after a configurable countdown if there is no response.
 - Menu bar icon visibility can be controlled from the app menu.
