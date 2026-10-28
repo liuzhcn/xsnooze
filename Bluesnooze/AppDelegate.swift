@@ -758,6 +758,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         lowBatteryTimedOut = false
         lowBatteryCanceled = false
         lowBatteryWarningDeadline = Date().addingTimeInterval(TimeInterval(lowBatterySettings.countdownSeconds))
+        AppLog.hibernate.notice("Showing low-battery warning. chargePercentage=\(snapshot.chargePercentage, privacy: .public), countdownSeconds=\(self.lowBatterySettings.countdownSeconds, privacy: .public), forceHibernateOnTimeout=\(self.lowBatterySettings.forceHibernateOnTimeout, privacy: .public)")
 
         let alert = NSAlert()
         alert.messageText = NSLocalizedString("Battery Low", comment: "Low battery alert title")
@@ -766,7 +767,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         lowBatteryAlert = alert
         updateLowBatteryAlertText(for: snapshot, remainingSeconds: lowBatterySettings.countdownSeconds)
 
-        lowBatteryCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        lowBatteryCountdownTimer = LowBatteryCountdownTimer.scheduledTimer { [weak self] _ in
             self?.tickLowBatteryCountdown(snapshot: snapshot)
         }
 
@@ -790,6 +791,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         if response == .alertFirstButtonReturn {
+            AppLog.hibernate.notice("Low-battery warning acknowledged; suppressing current battery bucket. bucket=\(bucket, privacy: .public)")
             suppressedBatteryBucket = bucket
         }
     }
@@ -809,6 +811,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         updateLowBatteryAlertText(for: snapshot, remainingSeconds: remainingSeconds)
 
         if remainingSeconds <= 0 {
+            AppLog.hibernate.notice("Low-battery warning countdown expired. forceHibernateOnTimeout=\(self.lowBatterySettings.forceHibernateOnTimeout, privacy: .public)")
             lowBatteryTimedOut = true
             lowBatteryCountdownTimer?.invalidate()
             lowBatteryCountdownTimer = nil
@@ -845,6 +848,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         lowBatteryCanceled = true
+        AppLog.hibernate.notice("Canceling low-battery warning because power conditions or settings changed.")
         lowBatteryCountdownTimer?.invalidate()
         lowBatteryCountdownTimer = nil
         lowBatteryAlert?.window.orderOut(nil)
@@ -1305,7 +1309,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.4"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.5"
         return version
     }
 
