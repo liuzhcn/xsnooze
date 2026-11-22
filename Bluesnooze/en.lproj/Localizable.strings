@@ -3,7 +3,7 @@
 "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will hibernate this Mac." = "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will hibernate this Mac.";
 "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will close this reminder." = "Battery is at %d%%. Connect power or click OK. If there is no response in %d seconds, XSnooze will close this reminder.";
 "XSnooze Helper Required" = "XSnooze Helper Required";
-"XSnooze could not install or contact its privileged helper. Forced low-battery hibernation requires administrator approval." = "XSnooze could not install or contact its privileged helper. Forced low-battery hibernation requires administrator approval.";
+"Install the matching XSnooze Helper using install-helper.command, then try again." = "Install the matching XSnooze Helper using install-helper.command, then try again.";
 "Launch at login" = "Launch at login";
 "Hide menu bar icon" = "Hide menu bar icon";
 "Quit" = "Quit";

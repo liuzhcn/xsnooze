@@ -28,9 +28,7 @@
 		5A1500292C25B00300B1784C /* PowerEventPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500282C25B00300B1784C /* PowerEventPolicy.swift */; };
 		5A15002B2C25B00400B1784C /* BluetoothPowerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A15002A2C25B00400B1784C /* BluetoothPowerController.swift */; };
 		5A15002D2C25B00500B1784C /* WirelessStateMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A15002C2C25B00500B1784C /* WirelessStateMonitor.swift */; };
-		4FDC9C13243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM in CopyFiles */ = {isa = PBXBuildFile; fileRef = 4FDC9C12243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM */; };
-		4FDC9C14243DCC6B00FB0C4E /* LaunchAtLogin.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */; };
-		4FDC9C15243DCC6B00FB0C4E /* LaunchAtLogin.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5A1500362C25B00900B1784C /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1500372C25B00900B1784C /* LaunchAtLogin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,27 +42,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		4FDC9C0C243DCB0B00FB0C4E /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 16;
-			files = (
-				4FDC9C13243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM in CopyFiles */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		4FDC9C16243DCC6B00FB0C4E /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				4FDC9C15243DCC6B00FB0C4E /* LaunchAtLogin.framework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		5A1500102C25B00100B1784C /* Embed Privileged Helper */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -109,8 +86,7 @@
 		5A1500282C25B00300B1784C /* PowerEventPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PowerEventPolicy.swift; sourceTree = "<group>"; };
 		5A15002A2C25B00400B1784C /* BluetoothPowerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothPowerController.swift; sourceTree = "<group>"; };
 		5A15002C2C25B00500B1784C /* WirelessStateMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WirelessStateMonitor.swift; sourceTree = "<group>"; };
-		4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = LaunchAtLogin.framework; path = Carthage/Build/Mac/LaunchAtLogin.framework; sourceTree = "<group>"; };
-		4FDC9C12243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM */ = {isa = PBXFileReference; lastKnownFileType = wrapper.dsym; name = LaunchAtLogin.framework.dSYM; path = Carthage/Build/Mac/LaunchAtLogin.framework.dSYM; sourceTree = "<group>"; };
+		5A1500372C25B00900B1784C /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LaunchAtLogin.swift; path = Carthage/Checkouts/LaunchAtLogin/Sources/LaunchAtLogin/LaunchAtLogin.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,7 +94,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4FDC9C14243DCC6B00FB0C4E /* LaunchAtLogin.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,7 +114,7 @@
 				5A1500112C25B00100B1784C /* Shared */,
 				5A1500122C25B00100B1784C /* XSnoozeHelper */,
 				4F229ABB243CC29500B1784C /* Products */,
-				4FDC9C0D243DCB7B00FB0C4E /* Frameworks */,
+				5A1500372C25B00900B1784C /* LaunchAtLogin.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -197,15 +172,6 @@
 			path = XSnoozeHelper;
 			sourceTree = "<group>";
 		};
-		4FDC9C0D243DCB7B00FB0C4E /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				4FDC9C12243DCC0300FB0C4E /* LaunchAtLogin.framework.dSYM */,
-				4FDC9C0E243DCB7B00FB0C4E /* LaunchAtLogin.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -217,8 +183,6 @@
 				4F229AB6243CC29500B1784C /* Sources */,
 				4F229AB7243CC29500B1784C /* Frameworks */,
 				4F229AB8243CC29500B1784C /* Resources */,
-				4FDC9C0C243DCB0B00FB0C4E /* CopyFiles */,
-				4FDC9C16243DCC6B00FB0C4E /* Embed Frameworks */,
 				5A1500102C25B00100B1784C /* Embed Privileged Helper */,
 				4FDC9C11243DCBD700FB0C4E /* Run Script */,
 			);
@@ -338,7 +302,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PROJECT_DIR}/Carthage/Build/Mac/LaunchAtLogin.framework/Resources/copy-helper.sh\"\n";
+			shellScript = "/bin/bash \"${PROJECT_DIR}/Scripts/embed-login-helper.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -348,6 +312,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4F229ABE243CC29500B1784C /* AppDelegate.swift in Sources */,
+				5A1500362C25B00900B1784C /* LaunchAtLogin.swift in Sources */,
 				5A1500012C25B00100B1784C /* LowBatteryPolicy.swift in Sources */,
 				5A15002F2C25B00600B1784C /* LowBatteryCountdownTimer.swift in Sources */,
 				5A1500312C25B00700B1784C /* LowBatteryWarningSession.swift in Sources */,
@@ -555,7 +520,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
@@ -585,7 +550,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.liuzhcn.XSnooze;
 				PRODUCT_NAME = XSnooze;
 				SWIFT_OBJC_BRIDGING_HEADER = "Bluesnooze/Bluesnooze-Bridging-Header.h";
@@ -599,13 +564,13 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 7X3FR535W8;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				OTHER_LDFLAGS = (
 					"-sectcreate",
 					__TEXT,
@@ -625,13 +590,13 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 7X3FR535W8;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "XSnoozeHelper/XSnoozeHelper-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.7.8;
+				MARKETING_VERSION = 1.7.9;
 				OTHER_LDFLAGS = (
 					"-sectcreate",
 					__TEXT,

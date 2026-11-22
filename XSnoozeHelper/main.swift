@@ -1,11 +1,12 @@
 import Foundation
 import OSLog
+import XPC
 
 private let helperLog = Logger(subsystem: "com.liuzhcn.XSnooze.Helper", category: "hibernate")
 
 private let stateFileURL = URL(fileURLWithPath: "/Library/PrivilegedHelperTools/com.liuzhcn.XSnooze.Helper.state.plist")
 
-final class HelperService: NSObject, PrivilegedHelperProtocol {
+final class HelperService {
     func prepareHibernateAndSleep(_ reply: @escaping (Bool, String?) -> Void) {
         helperLog.info("Preparing forced hibernation and sleep.")
         do {
@@ -132,15 +133,55 @@ final class HelperService: NSObject, PrivilegedHelperProtocol {
     }
 }
 
-final class HelperDelegate: NSObject, NSXPCListenerDelegate {
+final class HelperListener {
     private let service = HelperService()
+    private let queue = DispatchQueue(label: "com.liuzhcn.XSnooze.Helper.requests")
+    private let requirement: String
 
-    func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
-        newConnection.exportedInterface = NSXPCInterface(with: PrivilegedHelperProtocol.self)
-        newConnection.exportedObject = service
-        newConnection.resume()
+    init(requirement: String) {
+        self.requirement = requirement
+    }
+
+    func start() -> Bool {
+        let listener = xpc_connection_create_mach_service(
+            privilegedHelperMachServiceName, queue, UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER)
+        )
+        guard HelperIdentity.requirePeer(listener, requirement: requirement) else {
+            xpc_connection_cancel(listener)
+            return false
+        }
+        xpc_connection_set_event_handler(listener) { [self] event in
+            guard xpc_get_type(event) == XPC_TYPE_CONNECTION else { return }
+            let peer = event
+            xpc_connection_set_target_queue(peer, queue)
+            xpc_connection_set_event_handler(peer) { [self] request in
+                guard xpc_get_type(request) == XPC_TYPE_DICTIONARY,
+                      let reply = xpc_dictionary_create_reply(request) else { return }
+                let respond: (Bool, String?) -> Void = { success, message in
+                    xpc_dictionary_set_bool(reply, "success", success)
+                    if let message { xpc_dictionary_set_string(reply, "message", message) }
+                    xpc_connection_send_message(peer, reply)
+                }
+                guard let rawCommand = xpc_dictionary_get_string(request, "command"),
+                      let command = HelperCommand(rawValue: String(cString: rawCommand)) else {
+                    respond(false, "Unsupported helper command.")
+                    return
+                }
+                switch command {
+                case .prepareHibernateAndSleep: service.prepareHibernateAndSleep(respond)
+                case .restoreHibernationModeIfNeeded: service.restoreHibernationModeIfNeeded(respond)
+                case .status: service.status(respond)
+                }
+            }
+            xpc_connection_resume(peer)
+        }
+        xpc_connection_resume(listener)
+        // Retain the listener for the lifetime of the process.
+        self.listener = listener
         return true
     }
+
+    private var listener: xpc_connection_t?
 }
 
 enum HelperError: LocalizedError {
@@ -160,8 +201,15 @@ enum HelperError: LocalizedError {
     }
 }
 
-let delegate = HelperDelegate()
-let listener = NSXPCListener(machServiceName: privilegedHelperMachServiceName)
-listener.delegate = delegate
-listener.resume()
-RunLoop.current.run()
+// launchd supplies the pin from the root-owned installation configuration.
+// A missing or invalid pin must never start an unrestricted listener.
+guard geteuid() == 0, let requirement = HelperIdentity.clientRequirement(arguments: CommandLine.arguments) else {
+    helperLog.error("Missing or invalid trusted client identity; refusing to start.")
+    exit(EXIT_FAILURE)
+}
+let listener = HelperListener(requirement: requirement)
+guard listener.start() else {
+    helperLog.error("Unable to enforce trusted client identity; refusing to start.")
+    exit(EXIT_FAILURE)
+}
+dispatchMain()

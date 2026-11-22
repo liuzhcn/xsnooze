@@ -10,7 +10,6 @@ import Cocoa
 import CoreWLAN
 import IOBluetooth
 import IOKit.pwr_mgt
-import LaunchAtLogin
 import OSLog
 
 private enum AppLog {
@@ -961,7 +960,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let alert = NSAlert()
         alert.messageText = NSLocalizedString("XSnooze Helper Required", comment: "Privileged helper failure title")
         alert.informativeText = message ?? NSLocalizedString(
-            "XSnooze could not install or contact its privileged helper. Forced low-battery hibernation requires administrator approval.",
+            "Install the matching XSnooze Helper using install-helper.command, then try again.",
             comment: "Privileged helper failure text"
         )
         alert.alertStyle = .warning
@@ -1430,7 +1429,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func appVersionText() -> String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.8"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.7.9"
         return version
     }
 

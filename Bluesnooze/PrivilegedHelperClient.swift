@@ -1,155 +1,69 @@
 import Foundation
 import OSLog
-import Security
-import ServiceManagement
+import XPC
 
 private let hibernateLog = Logger(subsystem: "com.liuzhcn.XSnooze", category: "hibernate")
 
 final class PrivilegedHelperClient {
+    private static let unavailableMessage = NSLocalizedString(
+        "Install the matching XSnooze Helper using install-helper.command, then try again.",
+        comment: "Privileged helper missing or signature mismatch"
+    )
+
     func prepareHibernateAndSleep(completion: @escaping (Bool, String?) -> Void) {
         hibernateLog.info("Calling privileged helper to prepare hibernation and sleep.")
-        callHelper({ helper, connection in
-            helper.prepareHibernateAndSleep { success, message in
-                connection.invalidate()
-                if success {
-                    hibernateLog.info("Privileged helper prepared hibernation and sleep successfully.")
-                } else {
-                    hibernateLog.error("Privileged helper failed to prepare hibernation and sleep. message=\(message ?? "Unknown error", privacy: .public)")
-                }
-                completion(success, message)
-            }
-        }, unavailable: { [weak self] message in
-            hibernateLog.warning("Privileged helper unavailable; attempting to install helper. message=\(message, privacy: .public)")
-            self?.blessHelper { blessSuccess, blessMessage in
-                guard blessSuccess else {
-                    hibernateLog.error("Privileged helper installation failed. message=\(blessMessage ?? "Unknown error", privacy: .public)")
-                    completion(false, blessMessage)
-                    return
-                }
-
-                hibernateLog.info("Privileged helper installation succeeded; retrying hibernation request.")
-                self?.callHelper({ helper, connection in
-                    helper.prepareHibernateAndSleep { retrySuccess, retryMessage in
-                        connection.invalidate()
-                        if retrySuccess {
-                            hibernateLog.info("Privileged helper prepared hibernation and sleep successfully after installation.")
-                        } else {
-                            hibernateLog.error("Privileged helper failed to prepare hibernation and sleep after installation. message=\(retryMessage ?? "Unknown error", privacy: .public)")
-                        }
-                        completion(retrySuccess, retryMessage)
-                    }
-                }, unavailable: { retryMessage in
-                    hibernateLog.error("Privileged helper unavailable after installation. message=\(retryMessage, privacy: .public)")
-                    completion(false, retryMessage)
-                })
-            }
-        })
+        callHelper(.prepareHibernateAndSleep, completion: completion)
     }
 
     func restoreHibernationModeIfNeeded() {
-        hibernateLog.info("Calling privileged helper to restore hibernatemode if needed.")
-        callHelper({ helper, connection in
-            helper.restoreHibernationModeIfNeeded { success, message in
-                connection.invalidate()
-                if success {
-                    hibernateLog.info("Privileged helper restore hibernatemode request succeeded. message=\(message ?? "Restored if needed.", privacy: .public)")
-                } else if let message {
-                    hibernateLog.error("Failed to restore hibernatemode. message=\(message, privacy: .public)")
-                } else {
-                    hibernateLog.error("Failed to restore hibernatemode. message=Unknown error")
-                }
+        callHelper(.restoreHibernationModeIfNeeded) { success, message in
+            if success {
+                hibernateLog.info("Privileged helper restore hibernatemode request succeeded.")
+            } else {
+                hibernateLog.warning("Privileged helper restore unavailable. message=\(message ?? "Unknown error", privacy: .public)")
             }
-        }, unavailable: { message in
-            hibernateLog.warning("Privileged helper restore unavailable. message=\(message, privacy: .public)")
-        })
+        }
     }
 
     func status(completion: @escaping (Bool, String?) -> Void) {
-        callHelper({ helper, connection in
-            helper.status { success, message in
-                connection.invalidate()
-                completion(success, message)
-            }
-        }, unavailable: { message in
-            completion(false, message)
-        })
+        callHelper(.status, completion: completion)
     }
 
-    private func callHelper(
-        _ action: @escaping (PrivilegedHelperProtocol, NSXPCConnection) -> Void,
-        unavailable: @escaping (String) -> Void
-    ) {
-        let connection = NSXPCConnection(machServiceName: privilegedHelperMachServiceName, options: .privileged)
-        connection.remoteObjectInterface = NSXPCInterface(with: PrivilegedHelperProtocol.self)
-        connection.resume()
-
-        let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-            connection.invalidate()
-            unavailable(error.localizedDescription)
-        } as? PrivilegedHelperProtocol
-
-        guard let proxy else {
-            connection.invalidate()
-            unavailable("Unable to create privileged helper proxy.")
+    private func callHelper(_ command: HelperCommand, completion: @escaping (Bool, String?) -> Void) {
+        let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents/Library/LaunchServices/\(privilegedHelperMachServiceName)")
+        guard let requirement = HelperIdentity.bundledHelperRequirement(at: helperURL) else {
+            completion(false, Self.unavailableMessage)
             return
         }
 
-        action(proxy, connection)
-    }
+        let connection = xpc_connection_create_mach_service(
+            privilegedHelperMachServiceName, nil, UInt64(XPC_CONNECTION_MACH_SERVICE_PRIVILEGED)
+        )
+        guard HelperIdentity.requirePeer(connection, requirement: requirement) else {
+            xpc_connection_cancel(connection)
+            completion(false, Self.unavailableMessage)
+            return
+        }
+        xpc_connection_set_event_handler(connection) { _ in }
+        xpc_connection_resume(connection)
 
-    private func blessHelper(completion: @escaping (Bool, String?) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            var authorizationRef: AuthorizationRef?
-            var status = AuthorizationCreate(nil, nil, [], &authorizationRef)
-
-            guard status == errAuthorizationSuccess, let authorizationRef else {
-                DispatchQueue.main.async {
-                    completion(false, "Authorization failed with status \(status).")
-                }
-                return
-            }
-
+        let request = xpc_dictionary_create(nil, nil, 0)
+        xpc_dictionary_set_string(request, "command", command.rawValue)
+        let timeout = DispatchWorkItem { xpc_connection_cancel(connection) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
+        xpc_connection_send_message_with_reply(connection, request, nil) { reply in
             defer {
-                AuthorizationFree(authorizationRef, [])
+                timeout.cancel()
+                xpc_connection_cancel(connection)
             }
-
-            let blessed: Bool
-            let message: String?
-
-            let rightName = kSMRightBlessPrivilegedHelper
-            status = rightName.withCString { rightNamePointer in
-                var authItem = AuthorizationItem(
-                    name: rightNamePointer,
-                    valueLength: 0,
-                    value: nil,
-                    flags: 0
-                )
-                return withUnsafeMutablePointer(to: &authItem) { authItemPointer in
-                    var authRights = AuthorizationRights(count: 1, items: authItemPointer)
-                    let flags: AuthorizationFlags = [.interactionAllowed, .extendRights, .preAuthorize]
-                    return AuthorizationCopyRights(authorizationRef, &authRights, nil, flags, nil)
-                }
-            }
-
-            guard status == errAuthorizationSuccess else {
-                DispatchQueue.main.async {
-                    completion(false, "Authorization rights failed with status \(status).")
-                }
+            guard xpc_get_type(reply) == XPC_TYPE_DICTIONARY,
+                  let success = xpc_dictionary_get_value(reply, "success"),
+                  xpc_get_type(success) == XPC_TYPE_BOOL else {
+                completion(false, Self.unavailableMessage)
                 return
             }
-
-            var unmanagedError: Unmanaged<CFError>?
-            blessed = SMJobBless(
-                kSMDomainSystemLaunchd,
-                privilegedHelperMachServiceName as CFString,
-                authorizationRef,
-                &unmanagedError
-            )
-            message = unmanagedError?.takeRetainedValue().localizedDescription
-
-            DispatchQueue.main.async {
-                completion(blessed, message)
-            }
+            let message = xpc_dictionary_get_string(reply, "message").map { String(cString: $0) }
+            completion(xpc_bool_get_value(success), message)
         }
     }
 }

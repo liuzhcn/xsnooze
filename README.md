@@ -64,15 +64,19 @@ countdown or hibernation.
 
 ## Installation
 
-1. Download `XSnooze.zip` from the [latest release][download-latest].
-2. In Finder, open `XSnooze.zip` in your `Downloads` directory.
-3. Drag `XSnooze.app` to your `Applications` directory.
-4. Optional: configure `Launch at login` from the menu bar app.
+1. Download the DMG or ZIP from the [latest release][download-latest].
+2. Open the DMG or extract the ZIP, then drag `XSnooze.app` into `Applications`.
+3. To use forced low-battery hibernation, run the accompanying
+   `install-helper.command` and approve the installation as an administrator.
+4. Launch XSnooze, grant Bluetooth access when prompted, and optionally enable
+   `Launch at login` from the menu bar app.
 
-For local builds, run `install-helper.command` once if you want forced
-low-battery hibernation. It installs the XSnooze helper as a root LaunchDaemon
-so the app can run the required `pmset` operations without asking for a password
-during a low-battery event. Run `uninstall-helper.command` to remove it.
+The Helper is a root LaunchDaemon. Its installation authorizes the exact signed
+app and both sides require their expected peer's code signature. Re-run
+`install-helper.command` after replacing the app with a new version, even on a
+Mac with an older Helper already installed. Run `uninstall-helper.command` to
+remove the Helper. Forced hibernation is unavailable until the matching Helper
+is installed; the remaining features do not require it.
 
 ## Caveats
 
@@ -80,8 +84,9 @@ during a low-battery event. Run `uninstall-helper.command` to remove it.
   Mac" feature.
 - This app uses a private API to switch Bluetooth on and off. That is why it is
   not suitable for App Store distribution.
-- Forced low-battery hibernation requires a correctly signed release build so
-  macOS can authorize the privileged helper.
+- The locally packaged release is hardened and ad-hoc signed. It is not Apple
+  notarized, so macOS may require first-launch approval. The package is arm64
+  and runs on Apple Silicon Macs with macOS 12 or later.
 
 ## FAQs
 
@@ -154,21 +159,23 @@ XSnooze 会在 Mac 进入睡眠时按配置关闭蓝牙和 Wi-Fi，并在 Mac �
 
 ## 安装
 
-1. 从 [latest release][download-latest] 下载 `XSnooze.zip`。
-2. 在 Finder 中打开下载目录里的 `XSnooze.zip`。
-3. 将 `XSnooze.app` 拖到 `Applications` 目录。
-4. 可选：在菜单栏中启用 `登录时启动`。
+1. 从 [latest release][download-latest] 下载 DMG 或 ZIP 安装包。
+2. 打开 DMG 或解压 ZIP，将 `XSnooze.app` 拖到 `Applications` 目录。
+3. 如需启用低电量强制休眠，运行安装包中的 `install-helper.command`，并授予管理员权限。
+4. 启动 XSnooze，按提示授权蓝牙，并按需启用 `登录时启动`。
 
-如果使用本机构建版本，并希望启用低电量强制休眠，请先运行一次
-`install-helper.command`。它会把 XSnooze Helper 安装为 root LaunchDaemon，
-这样低电量时就可以自动执行所需的 `pmset` 操作，不会临时要求输入管理员密
-码。运行 `uninstall-helper.command` 可以移除 Helper。
+Helper 以 root LaunchDaemon 运行，安装时绑定当前 App 的代码签名，App 和 Helper
+双向校验签名后才通信。每次替换 App 版本后都应重新运行
+`install-helper.command`，包括已经安装过旧版 Helper 的电脑。运行
+`uninstall-helper.command` 可以移除 Helper。未安装配套 Helper 时不能执行强制休眠，
+其他功能不需要 Helper。
 
 ## 注意事项
 
 - 本应用不兼容“允许 Apple Watch 解锁 Mac”功能。
 - 本应用使用私有 API 来开关蓝牙，因此不适合通过 App Store 分发。
-- 低电量强制休眠需要使用正确签名的发布版本，macOS 才能授权特权 Helper。
+- 本地发布包采用 Hardened Runtime 和临时签名，未经过 Apple 公证，首次启动时
+  macOS 可能要求手动确认。安装包适用于 macOS 12 及以上的 Apple Silicon Mac。
 
 ## 常见问题
 
